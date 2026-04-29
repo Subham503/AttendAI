@@ -1,0 +1,175 @@
+body {
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(135deg, #6a11cb, #2575fc);
+    color: white;
+}
+
+/* NAVBAR */
+.navbar {
+    text-align: center;
+    padding: 20px;
+    font-size: 28px;
+    font-weight: bold;
+    background: rgba(255,255,255,0.1);
+}
+
+/* HERO */
+.hero {
+    text-align: center;
+    margin-top: 60px;
+}
+
+.hero h1 {
+    font-size: 60px;
+}
+
+.hero p {
+    font-size: 18px;
+    color: #eee;
+}
+
+/* DASHBOARD */
+.dashboard {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-top: 100px;
+}
+
+/* CARDS */
+.card {
+    width: 260px;
+    height: 180px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.15);
+    text-align: center;
+    padding: 20px;
+    text-decoration: none;
+    color: white;
+    transition: 0.3s;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+.card:hover {
+    transform: scale(1.1);
+    background: rgba(255,255,255,0.25);
+}
+
+.icon {
+    font-size: 40px;
+    margin-bottom: 10px;
+}
+/* FULL SCREEN CENTER */
+.center-container {
+    height: 80vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* FORM BOX */
+.form-box {
+    width: 400px;
+    padding: 40px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(15px);
+    text-align: center;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+}
+
+/* INPUT */
+input {
+    width: 100%;
+    padding: 12px;
+    margin-top: 15px;
+    border-radius: 10px;
+    border: none;
+}
+
+/* BUTTON */
+button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 20px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(45deg, #7f00ff, #e100ff);
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+/* BACK BUTTON */
+.back-btn {
+    text-decoration: none;
+    color: white;
+    font-size: 14px;
+}
+/* TABLE CONTAINER */
+.table-container {
+    width: 90%;
+    margin: 50px auto;
+    background: rgba(255,255,255,0.1);
+    padding: 30px;
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+}
+
+/* TOP BAR */
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+/* TABLE */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    color: black;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+th {
+    background: linear-gradient(45deg, #7f00ff, #e100ff);
+    color: white;
+    padding: 12px;
+}
+
+td {
+    padding: 12px;
+    text-align: center;
+}
+
+/* BUTTONS */
+.btn {
+    padding: 8px 15px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: white;
+    background: #7f00ff;
+}
+
+.btn:hover {
+    opacity: 0.8;
+}
+
+.danger {
+    background: red;
+}
+
+.small {
+    padding: 5px 10px;
+}
+select {
+    width: 100%;
+    padding: 12px;
+    margin-top: 15px;
+    border-radius: 10px;
+    border: none;
+    background: rgba(255,255,255,0.9);
+}

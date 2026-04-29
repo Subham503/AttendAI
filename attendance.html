@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Attendance Records — SmartAttend</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{--neon-cyan:#00fff7;--neon-pink:#ff00e5;--dark:#020810;--text:#c8e6ff;}
+html,body{width:100%;height:100%;overflow:hidden;}
+body{background:var(--dark);font-family:'Rajdhani',sans-serif;color:var(--text);}
+.grid-bg{position:fixed;inset:0;background-image:linear-gradient(rgba(0,255,247,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,247,0.03) 1px,transparent 1px);background-size:60px 60px;animation:gridMove 20s linear infinite;pointer-events:none;z-index:0;}
+@keyframes gridMove{0%{background-position:0 0;}100%{background-position:60px 60px;}}
+.glow-orb{position:fixed;border-radius:50%;pointer-events:none;z-index:0;filter:blur(80px);opacity:0.1;}
+.glow-orb.cyan{width:600px;height:600px;background:var(--neon-cyan);top:-200px;right:-150px;}
+.glow-orb.pink{width:400px;height:400px;background:var(--neon-pink);bottom:-150px;left:-100px;}
+.scanlines{position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px);pointer-events:none;z-index:1;}
+.corner{position:fixed;width:50px;height:50px;z-index:2;opacity:0.3;}
+.corner.tl{top:16px;left:16px;border-top:2px solid var(--neon-cyan);border-left:2px solid var(--neon-cyan);}
+.corner.tr{top:16px;right:16px;border-top:2px solid var(--neon-cyan);border-right:2px solid var(--neon-cyan);}
+.corner.bl{bottom:16px;left:16px;border-bottom:2px solid var(--neon-cyan);border-left:2px solid var(--neon-cyan);}
+.corner.br{bottom:16px;right:16px;border-bottom:2px solid var(--neon-cyan);border-right:2px solid var(--neon-cyan);}
+
+.page{position:relative;z-index:2;width:100vw;height:100vh;display:flex;flex-direction:column;padding:24px 32px;gap:20px;}
+
+.top-bar{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.back-btn{display:inline-flex;align-items:center;gap:8px;font-family:'Share Tech Mono',monospace;font-size:11px;color:rgba(0,255,247,0.5);letter-spacing:2px;text-decoration:none;text-transform:uppercase;transition:color 0.2s;}
+.back-btn:hover{color:var(--neon-cyan);}
+.back-btn svg{width:14px;height:14px;stroke:currentColor;}
+.page-title{font-family:'Orbitron',monospace;font-size:20px;font-weight:700;letter-spacing:4px;text-transform:uppercase;background:linear-gradient(90deg,var(--neon-cyan),#fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.record-count{font-family:'Share Tech Mono',monospace;font-size:11px;color:rgba(0,255,247,0.4);letter-spacing:2px;}
+
+/* Table container */
+.table-container{
+  flex:1;overflow-y:auto;overflow-x:auto;
+  background:rgba(5,15,30,0.7);
+  border:1px solid rgba(0,255,247,0.15);
+  border-radius:12px;
+  backdrop-filter:blur(10px);
+}
+.table-container::-webkit-scrollbar{width:4px;height:4px;}
+.table-container::-webkit-scrollbar-track{background:transparent;}
+.table-container::-webkit-scrollbar-thumb{background:rgba(0,255,247,0.2);border-radius:2px;}
+
+table{width:100%;border-collapse:collapse;min-width:700px;}
+thead{position:sticky;top:0;z-index:10;}
+thead tr{background:rgba(0,255,247,0.06);border-bottom:1px solid rgba(0,255,247,0.2);}
+th{
+  padding:14px 20px;
+  font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:400;
+  letter-spacing:2px;text-transform:uppercase;
+  color:rgba(0,255,247,0.6);text-align:left;white-space:nowrap;
+}
+tbody tr{
+  border-bottom:1px solid rgba(0,255,247,0.06);
+  transition:background 0.2s;
+  animation:rowIn 0.4s ease both;
+}
+tbody tr:nth-child(1){animation-delay:0.05s;}
+tbody tr:nth-child(2){animation-delay:0.1s;}
+tbody tr:nth-child(3){animation-delay:0.15s;}
+tbody tr:nth-child(4){animation-delay:0.2s;}
+tbody tr:nth-child(5){animation-delay:0.25s;}
+@keyframes rowIn{from{opacity:0;transform:translateX(-10px);}to{opacity:1;transform:translateX(0);}}
+tbody tr:hover{background:rgba(0,255,247,0.04);}
+td{padding:13px 20px;font-size:14px;color:var(--text);white-space:nowrap;}
+
+.badge-present{
+  display:inline-block;
+  background:rgba(0,255,100,0.12);
+  border:1px solid rgba(0,255,100,0.3);
+  color:#00ff64;
+  font-family:'Share Tech Mono',monospace;font-size:10px;
+  letter-spacing:2px;padding:3px 10px;border-radius:20px;
+}
+
+.del-btn{
+  background:rgba(255,0,229,0.08);
+  border:1px solid rgba(255,0,229,0.25);
+  border-radius:6px;padding:5px 12px;
+  font-family:'Share Tech Mono',monospace;font-size:10px;
+  letter-spacing:1px;color:rgba(255,0,229,0.6);
+  text-decoration:none;transition:all 0.2s;
+  display:inline-block;
+}
+.del-btn:hover{background:rgba(255,0,229,0.15);border-color:var(--neon-pink);color:var(--neon-pink);}
+
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:60px;gap:12px;
+}
+.empty-state svg{width:40px;height:40px;stroke:rgba(0,255,247,0.2);}
+.empty-state p{font-family:'Share Tech Mono',monospace;font-size:12px;color:rgba(200,230,255,0.2);letter-spacing:2px;}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="glow-orb cyan"></div>
+<div class="glow-orb pink"></div>
+<div class="scanlines"></div>
+<div class="corner tl"></div><div class="corner tr"></div>
+<div class="corner bl"></div><div class="corner br"></div>
+
+<div class="page">
+  <div class="top-bar">
+    <a href="/" class="back-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back
+    </a>
+    <div class="page-title">Attendance Records</div>
+    <div class="record-count">{{ data|length }} RECORDS FOUND</div>
+  </div>
+
+  <div class="table-container">
+    {% if data %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Student ID</th>
+          <th>Name</th>
+          <th>Department</th>
+          <th>Class</th>
+          <th>Subject</th>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in data %}
+        <tr>
+          <td style="color:rgba(0,255,247,0.4);font-family:'Share Tech Mono',monospace;font-size:12px;">{{ loop.index }}</td>
+          <td style="font-family:'Share Tech Mono',monospace;font-size:12px;color:rgba(0,255,247,0.6);">{{ row[1] }}</td>
+          <td style="font-weight:600;color:#fff;">{{ row[2] }}</td>
+          <td>{{ row[3] }}</td>
+          <td>{{ row[4] }}</td>
+          <td style="color:rgba(200,230,255,0.6);">{{ row[5] }}</td>
+          <td style="font-family:'Share Tech Mono',monospace;font-size:12px;">{{ row[6] }}</td>
+          <td style="font-family:'Share Tech Mono',monospace;font-size:12px;">{{ row[7] }}</td>
+          <td><span class="badge-present">{{ row[8] }}</span></td>
+          <td><a href="/delete/{{ row[0] }}" class="del-btn" onclick="return confirm('Delete this record?')">DELETE</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+      </svg>
+      <p>NO ATTENDANCE RECORDS YET</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

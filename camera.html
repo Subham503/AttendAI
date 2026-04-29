@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mark Attendance — SmartAttend</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600&display=swap"
+    rel="stylesheet" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --neon-cyan: #00fff7;
+      --neon-pink: #ff00e5;
+      --neon-green: #00ff64;
+      --dark: #020810;
+      --text: #c8e6ff;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background: var(--dark);
+      font-family: 'Rajdhani', sans-serif;
+      color: var(--text);
+    }
+
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image: linear-gradient(rgba(0, 255, 247, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 247, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridMove 20s linear infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    @keyframes gridMove {
+      0% {
+        background-position: 0 0;
+      }
+
+      100% {
+        background-position: 60px 60px;
+      }
+    }
+
+    .glow-orb {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+      filter: blur(80px);
+      opacity: 0.1;
+    }
+
+    .glow-orb.cyan {
+      width: 500px;
+      height: 500px;
+      background: var(--neon-cyan);
+      top: -100px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.07) 2px, rgba(0, 0, 0, 0.07) 4px);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .corner {
+      position: fixed;
+      width: 50px;
+      height: 50px;
+      z-index: 2;
+      opacity: 0.3;
+    }
+
+    .corner.tl {
+      top: 16px;
+      left: 16px;
+      border-top: 2px solid var(--neon-cyan);
+      border-left: 2px solid var(--neon-cyan);
+    }
+
+    .corner.tr {
+      top: 16px;
+      right: 16px;
+      border-top: 2px solid var(--neon-cyan);
+      border-right: 2px solid var(--neon-cyan);
+    }
+
+    .corner.bl {
+      bottom: 16px;
+      left: 16px;
+      border-bottom: 2px solid var(--neon-cyan);
+      border-left: 2px solid var(--neon-cyan);
+    }
+
+    .corner.br {
+      bottom: 16px;
+      right: 16px;
+      border-bottom: 2px solid var(--neon-cyan);
+      border-right: 2px solid var(--neon-cyan);
+    }
+
+    .page {
+      position: relative;
+      z-index: 2;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 20px;
+    }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: min(960px, 95vw);
+    }
+
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: rgba(0, 255, 247, 0.5);
+      letter-spacing: 2px;
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    .back-btn:hover {
+      color: var(--neon-cyan);
+    }
+
+    .back-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+    }
+
+    .page-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, var(--neon-cyan), #fff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .live-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: rgba(0, 255, 100, 0.7);
+      letter-spacing: 2px;
+    }
+
+    .live-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #00ff64;
+      animation: blink 1s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.2;
+      }
+    }
+
+    .main-layout {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+      width: min(960px, 95vw);
+    }
+
+    /* Camera */
+    .camera-panel {
+      flex: 1;
+      background: rgba(5, 15, 30, 0.8);
+      border: 1px solid rgba(0, 255, 247, 0.2);
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .camera-feed {
+      width: 100%;
+      display: block;
+      aspect-ratio: 4/3;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    /* mirror effect */
+    video.camera-feed {
+      background: #000;
+    }
+
+    .scan-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .scan-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .scan-line.active {
+      opacity: 0.6;
+      animation: scanLine 1.5s ease-in-out;
+    }
+
+    @keyframes scanLine {
+      0% {
+        top: 0;
+        opacity: 0;
+      }
+
+      10% {
+        opacity: 0.6;
+      }
+
+      90% {
+        opacity: 0.6;
+      }
+
+      100% {
+        top: 100%;
+        opacity: 0;
+      }
+    }
+
+    .corner-bracket {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+    }
+
+    .corner-bracket.tl {
+      top: 16px;
+      left: 16px;
+      border-top: 2px solid var(--neon-cyan);
+      border-left: 2px solid var(--neon-cyan);
+    }
+
+    .corner-bracket.tr {
+      top: 16px;
+      right: 16px;
+      border-top: 2px solid var(--neon-cyan);
+      border-right: 2px solid var(--neon-cyan);
+    }
+
+    .corner-bracket.bl {
+      bottom: 16px;
+      left: 16px;
+      border-bottom: 2px solid var(--neon-cyan);
+      border-left: 2px solid var(--neon-cyan);
+    }
+
+    .corner-bracket.br {
+      bottom: 16px;
+      right: 16px;
+      border-bottom: 2px solid var(--neon-cyan);
+      border-right: 2px solid var(--neon-cyan);
+    }
+
+    .cam-status {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(0, 255, 247, 0.3);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: var(--neon-cyan);
+      letter-spacing: 2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.3s;
+    }
+
+    /* Flash overlay on capture */
+    .flash {
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.1s;
+    }
+
+    .flash.active {
+      opacity: 0.4;
+    }
+
+    /* Right panel */
+    .controls-panel {
+      width: 280px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .form-card {
+      background: rgba(5, 15, 30, 0.85);
+      border: 1px solid rgba(0, 255, 247, 0.2);
+      border-radius: 12px;
+      padding: 20px;
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .form-card-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: rgba(0, 255, 247, 0.5);
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(0, 255, 247, 0.1);
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(0, 255, 247, 0.5);
+    }
+
+    input {
+      background: rgba(0, 255, 247, 0.03);
+      border: 1px solid rgba(0, 255, 247, 0.15);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 14px;
+      color: var(--text);
+      outline: none;
+      transition: all 0.2s;
+      width: 100%;
+    }
+
+    input:focus {
+      border-color: rgba(0, 255, 247, 0.5);
+      background: rgba(0, 255, 247, 0.06);
+      box-shadow: 0 0 16px rgba(0, 255, 247, 0.08);
+    }
+
+    input::placeholder {
+      color: rgba(200, 230, 255, 0.2);
+    }
+
+    .status-card {
+      background: rgba(5, 15, 30, 0.8);
+      border: 1px solid rgba(0, 255, 100, 0.2);
+      border-radius: 12px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.3s;
+    }
+
+    .status-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(200, 230, 255, 0.3);
+    }
+
+    .status-val {
+      font-family: 'Orbitron', monospace;
+      font-size: 13px;
+      color: #00ff64;
+      letter-spacing: 2px;
+      transition: all 0.3s;
+    }
+
+    .status-val.error {
+      color: #ff4455;
+    }
+
+    .status-val.scanning {
+      color: var(--neon-cyan);
+      animation: pulse 0.8s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
+    }
+
+    .scan-btn {
+      width: 100%;
+      background: rgba(0, 255, 247, 0.08);
+      border: 1px solid rgba(0, 255, 247, 0.5);
+      border-radius: 12px;
+      padding: 16px;
+      font-family: 'Orbitron', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--neon-cyan);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.3s;
+      box-shadow: 0 0 20px rgba(0, 255, 247, 0.08);
+    }
+
+    .scan-btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      flex-shrink: 0;
+    }
+
+    .scan-btn:hover:not(:disabled) {
+      background: rgba(0, 255, 247, 0.15);
+      box-shadow: 0 0 40px rgba(0, 255, 247, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .scan-btn:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    .scan-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Result toast */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: rgba(5, 15, 30, 0.95);
+      border: 1px solid rgba(0, 255, 100, 0.4);
+      border-radius: 12px;
+      padding: 14px 24px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+      color: var(--neon-green);
+      letter-spacing: 1px;
+      z-index: 999;
+      transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+      opacity: 0;
+      max-width: 90vw;
+      text-align: center;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    .toast.error {
+      border-color: rgba(255, 68, 85, 0.4);
+      color: #ff4455;
+    }
+
+    .hint {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: rgba(200, 230, 255, 0.2);
+      letter-spacing: 1px;
+      text-align: center;
+      line-height: 1.8;
+    }
+
+    /* Hidden canvas for capture */
+    canvas {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="grid-bg"></div>
+  <div class="glow-orb cyan"></div>
+  <div class="scanlines"></div>
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+
+  <div class="page">
+    <div class="top-bar">
+      <a href="/" class="back-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+        Back
+      </a>
+      <div class="page-title">Face Scanner</div>
+      <div class="live-badge">
+        <div class="live-dot"></div>LIVE
+      </div>
+    </div>
+
+    <div class="main-layout">
+      <!-- Camera Feed -->
+      <div class="camera-panel">
+        <video id="videoFeed" class="camera-feed" autoplay playsinline muted></video>
+        <div class="flash" id="flash"></div>
+        <div class="scan-overlay">
+          <div class="scan-line" id="scanLine"></div>
+          <div class="corner-bracket tl"></div>
+          <div class="corner-bracket tr"></div>
+          <div class="corner-bracket bl"></div>
+          <div class="corner-bracket br"></div>
+        </div>
+        <div class="cam-status" id="camStatus">
+          <div class="live-dot"></div><span id="camStatusText">INITIALIZING</span>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="controls-panel">
+        <div class="form-card">
+          <div class="form-card-title">Session Details</div>
+          <div class="field">
+            <label>Subject</label>
+            <input type="text" id="subjectInput" placeholder="e.g. Mathematics" value="{{ subject }}" />
+          </div>
+          <div class="field">
+            <label>Department</label>
+            <input type="text" id="deptInput" placeholder="e.g. CSE" value="{{ department }}" />
+          </div>
+        </div>
+
+        <div class="status-card" id="statusCard">
+          <div class="status-label">Camera Status</div>
+          <div class="status-val" id="statusVal">LOADING</div>
+        </div>
+
+        <button class="scan-btn" id="scanBtn" onclick="captureAndMark()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+          </svg>
+          Capture &amp; Mark
+        </button>
+
+        <div class="hint">Fill subject &amp; department<br />position face in frame<br />then press Capture</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden canvas for frame capture -->
+  <canvas id="captureCanvas"></canvas>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const video = document.getElementById('videoFeed');
+    const canvas = document.getElementById('captureCanvas');
+    const scanBtn = document.getElementById('scanBtn');
+    const statusVal = document.getElementById('statusVal');
+    const camStatusText = document.getElementById('camStatusText');
+    const toast = document.getElementById('toast');
+    const flash = document.getElementById('flash');
+    const scanLine = document.getElementById('scanLine');
+
+    // ── Init webcam ──────────────────────────────────────────────
+    async function initCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
+        });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          setStatus('READY', false);
+          camStatusText.textContent = 'LIVE FEED';
+          scanBtn.disabled = false;
+        };
+      } catch (err) {
+        setStatus('NO CAM', true);
+        camStatusText.textContent = 'ERROR';
+        showToast('Camera access denied. Please allow camera permissions.', true);
+        console.error('Camera error:', err);
+      }
+    }
+
+    // ── Capture frame → send to Flask ────────────────────────────
+    async function captureAndMark() {
+      const subject = document.getElementById('subjectInput').value.trim() || 'General';
+      const dept = document.getElementById('deptInput').value.trim() || 'General';
+
+      // UI: scanning state
+      scanBtn.disabled = true;
+      setStatus('SCANNING', true, true);
+      triggerFlash();
+      triggerScanLine();
+
+      // Draw current video frame to canvas
+      const ctx = canvas.getContext('2d');
+      // Draw mirrored (match video mirror transform)
+      ctx.save();
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
+
+      // Get base64 JPEG (quality 0.85)
+      const imageData = canvas.toDataURL('image/jpeg', 0.85);
+
+      try {
+        const response = await fetch('/mark_attendance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: imageData, subject, department: dept })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showToast(result.message || '✅ Attendance marked!', false);
+          setStatus('MARKED', false);
+          // Redirect to attendance page after 2s
+          setTimeout(() => { window.location.href = '/attendance'; }, 2000);
+        } else {
+          showToast(result.message || '⚠️ Not recognized. Try again.', true);
+          setStatus('RETRY', true);
+          scanBtn.disabled = false;
+        }
+      } catch (err) {
+        showToast('❌ Server error. Check Flask is running.', true);
+        setStatus('ERROR', true);
+        scanBtn.disabled = false;
+        console.error('Fetch error:', err);
+      }
+    }
+
+    // ── UI helpers ───────────────────────────────────────────────
+    function setStatus(text, isError = false, isScanning = false) {
+      statusVal.textContent = text;
+      statusVal.className = 'status-val' + (isError ? ' error' : '') + (isScanning ? ' scanning' : '');
+    }
+
+    function triggerFlash() {
+      flash.classList.add('active');
+      setTimeout(() => flash.classList.remove('active'), 150);
+    }
+
+    function triggerScanLine() {
+      scanLine.classList.remove('active');
+      void scanLine.offsetWidth; // reflow to restart animation
+      scanLine.classList.add('active');
+      setTimeout(() => scanLine.classList.remove('active'), 1600);
+    }
+
+    function showToast(msg, isError = false) {
+      toast.textContent = msg;
+      toast.className = 'toast' + (isError ? ' error' : '');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 4000);
+    }
+
+    // ── Boot ─────────────────────────────────────────────────────
+    initCamera();
+  </script>
+</body>
+
+</html>
