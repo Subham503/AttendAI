@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, Response, jsonify, session
 import cv2
 from datetime import datetime
-import mysql.connector
+from supabase import create_client
 import os
 import numpy as np
 import bcrypt
@@ -14,21 +14,17 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "smartattend_secret_2024")
 
+supabase_client = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_KEY")
+)
+
 current_subject = "general"
 current_department = "general"
 
 # Global model and label map for efficiency
 global_recognizer = cv2.face.LBPHFaceRecognizer_create()
 global_label_map = {}
-
-# ================= DATABASE =================
-def connect_db():
-    return mysql.connector.connect(
-        host=os.getenv("DB_HOST", "localhost"),
-        user=os.getenv("DB_USER", "root"),
-        password=os.getenv("DB_PASSWORD", ""),
-        database=os.getenv("DB_NAME", "smart_attendance")
-    )
 
 # ================= MODEL LOADING =================
 def load_model():
@@ -49,11 +45,8 @@ def train_model():
     global global_recognizer, global_label_map
     face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 
-    db = connect_db()
-    cursor = db.cursor()
-    cursor.execute("SELECT id, name, reg_no, department, class FROM students")
-    students = cursor.fetchall()
-    db.close()
+    result = supabase_client.table('students').select('id, name, reg_no, department, class').execute()
+    students = [(s['id'], s['name'], s['reg_no'], s['department'], s['class']) for s in (result.data or [])]
 
     if not students:
         print("❌ No students in DB")
@@ -144,20 +137,16 @@ def login():
     if request.method == 'GET':
         return render_template('login.html')
 
-    # POST — comes as JSON from the login form JS
-    data = request.get_json()
+    # POST — comes as JSON from the login form JS or form data
+    data = request.get_json(force=True, silent=True) or {}
     username = data.get('username', '').strip()
     password = data.get('password', '').strip()
     role     = data.get('role', 'admin')
 
-    db = connect_db()
-    cursor = db.cursor()
-
     if role == 'admin':
-        cursor.execute("SELECT password FROM admins WHERE username=%s", (username,))
-        user = cursor.fetchone()
-        db.close()
-        if user and bcrypt.checkpw(password.encode(), user[0].encode()):
+        result = supabase_client.table('admins').select('password').eq('username', username).execute()
+        user = result.data[0] if result.data else None
+        if user and bcrypt.checkpw(password.encode(), user['password'].encode()):
             session['logged_in'] = True
             session['role']      = 'admin'
             session['name']      = username
@@ -165,29 +154,26 @@ def login():
         return jsonify({'success': False, 'message': 'Invalid admin credentials.'})
 
     elif role == 'faculty':
-        cursor.execute("SELECT password, name FROM faculty WHERE faculty_id=%s", (username,))
-        user = cursor.fetchone()
-        db.close()
-        if user and bcrypt.checkpw(password.encode(), user[0].encode()):
+        result = supabase_client.table('faculty').select('password, name').eq('faculty_id', username).execute()
+        user = result.data[0] if result.data else None
+        if user and bcrypt.checkpw(password.encode(), user['password'].encode()):
             session['logged_in'] = True
             session['role']      = 'faculty'
-            session['name']      = user[1] if user[1] else username
+            session['name']      = user['name'] if user['name'] else username
             return jsonify({'success': True, 'redirect': '/'})
         return jsonify({'success': False, 'message': 'Invalid faculty credentials.'})
 
     elif role == 'student':
-        cursor.execute("SELECT password, name FROM students WHERE reg_no=%s", (username,))
-        user = cursor.fetchone()
-        db.close()
-        if user and bcrypt.checkpw(password.encode(), user[0].encode()):
+        result = supabase_client.table('students').select('password, name').eq('reg_no', username).execute()
+        user = result.data[0] if result.data else None
+        if user and bcrypt.checkpw(password.encode(), user['password'].encode()):
             session['logged_in'] = True
             session['role']      = 'student'
-            session['name']      = user[1]
+            session['name']      = user['name']
             session['reg_no']    = username
-            return jsonify({'success': True, 'redirect': '/student_dashboard'})
+            return jsonify({'success': True, 'redirect': '/'})
         return jsonify({'success': False, 'message': 'Invalid student credentials.'})
 
-    db.close()
     return jsonify({'success': False, 'message': 'Invalid credentials.'})
 
 # ================= LOGOUT =================
@@ -213,21 +199,23 @@ def student_dashboard():
     if not session.get('logged_in') or session.get('role') != 'student':
         return redirect('/login')
     reg_no = session.get('reg_no')
-    db = connect_db()
-    cursor = db.cursor()
-    cursor.execute("""
-        SELECT subject, date, time, status FROM attendance
-        WHERE student_id = (SELECT id FROM students WHERE reg_no = %s)
-        ORDER BY date DESC, time DESC
-    """, (reg_no,))
-    records = cursor.fetchall()
-    cursor.execute("""
-        SELECT subject, COUNT(*) FROM attendance
-        WHERE student_id = (SELECT id FROM students WHERE reg_no = %s)
-        GROUP BY subject
-    """, (reg_no,))
-    subject_stats = cursor.fetchall()
-    db.close()
+    
+    student_res = supabase_client.table('students').select('id').eq('reg_no', reg_no).execute()
+    student_id = student_res.data[0]['id'] if student_res.data else None
+    
+    if student_id:
+        records_res = supabase_client.table('attendance').select('subject, date, time, status').eq('student_id', student_id).order('date', desc=True).order('time', desc=True).execute()
+        records = [(r['subject'], r['date'], r['time'], r['status']) for r in (records_res.data or [])]
+        
+        all_att_res = supabase_client.table('attendance').select('subject').eq('student_id', student_id).execute()
+        stats = {}
+        for r in (all_att_res.data or []):
+            stats[r['subject']] = stats.get(r['subject'], 0) + 1
+        subject_stats = [(subj, count) for subj, count in stats.items()]
+    else:
+        records = []
+        subject_stats = []
+        
     return render_template("student_dashboard.html",
                            name=session.get('name'),
                            reg_no=reg_no,
@@ -252,7 +240,7 @@ def register():
         return render_template("register.html")
 
     import base64
-    data       = request.get_json()
+    data = request.get_json(force=True, silent=True) or {}
     name       = data.get('name', '').strip()
     reg_no     = data.get('reg_no', '').strip().upper()
     department = data.get('department', '').strip().upper()
@@ -296,14 +284,13 @@ def register():
         return jsonify({'success': False, 'message': 'No face detected in any frame. Retry in better lighting.'})
 
     try:
-        db = connect_db()
-        cursor = db.cursor()
-        cursor.execute(
-            "INSERT INTO students (name, reg_no, department, class, password) VALUES (%s,%s,%s,%s,%s)",
-            (name, reg_no, department, class_name, hashed_pwd)
-        )
-        db.commit()
-        db.close()
+        supabase_client.table('students').insert({
+            'name': name,
+            'reg_no': reg_no,
+            'department': department,
+            'class': class_name,
+            'password': hashed_pwd.decode('utf-8')
+        }).execute()
     except Exception as e:
         return jsonify({'success': False, 'message': f'DB error: {str(e)}'})
 
@@ -355,8 +342,6 @@ def mark_attendance():
     if len(faces) == 0:
         return jsonify({'success': False, 'message': 'No face detected. Position face clearly.'})
 
-    db     = connect_db()
-    cursor = db.cursor()
     CONFIDENCE_THRESHOLD = 60
     marked_names  = []
     skipped_names = []
@@ -371,23 +356,25 @@ def mark_attendance():
         student = global_label_map[label]
         student_id, name, reg_no, dept, cls = student
         now = datetime.now()
+        
         try:
-            cursor.execute(
-                "SELECT id FROM attendance WHERE student_id=%s AND LOWER(subject)=%s AND date=%s",
-                (student_id, current_subject, now.date())
-            )
-            if cursor.fetchone():
+            existing = supabase_client.table('attendance').select('id').eq('student_id', student_id).ilike('subject', current_subject).eq('date', str(now.date())).execute()
+            if existing.data:
                 skipped_names.append(name)
             else:
-                cursor.execute(
-                    "INSERT INTO attendance (student_id, name, department, class, subject, date, time, status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
-                    (student_id, name, dept, cls, current_subject, now.date(), now.time(), "Present")
-                )
-                db.commit()
+                supabase_client.table('attendance').insert({
+                    'student_id': student_id,
+                    'name': name,
+                    'department': dept,
+                    'class': cls,
+                    'subject': current_subject,
+                    'date': str(now.date()),
+                    'time': str(now.time()),
+                    'status': 'Present'
+                }).execute()
                 marked_names.append(name)
         except Exception as e:
             print(f"DB ERROR: {e}")
-    db.close()
 
     if marked_names:
         return jsonify({'success': True, 'message': f'✅ Marked: {", ".join(marked_names)}'})
@@ -401,11 +388,15 @@ def mark_attendance():
 def attendance():
     if not session.get('logged_in'):
         return redirect('/login')
-    db = connect_db()
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM attendance")
-    data = cursor.fetchall()
-    db.close()
+    
+    result = supabase_client.table('attendance').select('*').execute()
+    data = []
+    for r in (result.data or []):
+        data.append((
+            r.get('id'), r.get('student_id'), r.get('name'), r.get('department'), 
+            r.get('class'), r.get('subject'), r.get('date'), r.get('time'), r.get('status')
+        ))
+        
     return render_template("attendance.html", data=data)
 
 # ================= DASHBOARD =================
@@ -413,13 +404,19 @@ def attendance():
 def dashboard():
     if not session.get('logged_in'):
         return redirect('/login')
-    db = connect_db()
-    cursor = db.cursor()
-    cursor.execute("SELECT department, COUNT(*) FROM attendance GROUP BY department")
-    dept_data = cursor.fetchall()
-    cursor.execute("SELECT subject, COUNT(*) FROM attendance GROUP BY subject")
-    subject_data = cursor.fetchall()
-    db.close()
+    
+    result = supabase_client.table('attendance').select('department, subject').execute()
+    dept_counts = {}
+    subj_counts = {}
+    for r in (result.data or []):
+        dept = r.get('department')
+        subj = r.get('subject')
+        dept_counts[dept] = dept_counts.get(dept, 0) + 1
+        subj_counts[subj] = subj_counts.get(subj, 0) + 1
+        
+    dept_data = [(k, v) for k, v in dept_counts.items()]
+    subject_data = [(k, v) for k, v in subj_counts.items()]
+    
     return render_template("dashboard.html",
                            dept_data=dept_data,
                            subject_data=subject_data)
@@ -429,11 +426,8 @@ def dashboard():
 def delete(id):
     if not session.get('logged_in'):
         return redirect('/login')
-    db = connect_db()
-    cursor = db.cursor()
-    cursor.execute("DELETE FROM attendance WHERE id=%s", (id,))
-    db.commit()
-    db.close()
+    
+    supabase_client.table('attendance').delete().eq('id', id).execute()
     return redirect('/attendance')
 
 # ================= RUN =================

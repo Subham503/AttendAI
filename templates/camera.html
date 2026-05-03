@@ -210,7 +210,7 @@
       width: min(960px, 95vw);
     }
 
-    /* Camera */
+    /* Camera panel */
     .camera-panel {
       flex: 1;
       background: rgba(5, 15, 30, 0.8);
@@ -228,7 +228,6 @@
       transform: scaleX(-1);
     }
 
-    /* mirror effect */
     video.camera-feed {
       background: #000;
     }
@@ -327,7 +326,99 @@
       transition: all 0.3s;
     }
 
-    /* Flash overlay on capture */
+    /* Liveness overlay */
+    .liveness-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: rgba(2, 8, 16, 0.6);
+      backdrop-filter: blur(2px);
+      transition: opacity 0.5s;
+      z-index: 3;
+    }
+
+    .liveness-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .liveness-icon {
+      font-size: 44px;
+      animation: eyePulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes eyePulse {
+
+      0%,
+      100% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.2);
+      }
+    }
+
+    .liveness-text {
+      font-family: 'Orbitron', monospace;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      color: var(--neon-cyan);
+      text-align: center;
+    }
+
+    .liveness-sub {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: rgba(200, 230, 255, 0.4);
+      letter-spacing: 2px;
+    }
+
+    .ear-bar-wrap {
+      width: 160px;
+      height: 4px;
+      background: rgba(0, 255, 247, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .ear-bar {
+      height: 100%;
+      width: 50%;
+      background: var(--neon-cyan);
+      border-radius: 4px;
+      transition: width 0.08s, background 0.15s;
+    }
+
+    /* Confirmed badge */
+    .confirmed-badge {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 255, 100, 0.1);
+      border: 1px solid rgba(0, 255, 100, 0.4);
+      border-radius: 20px;
+      padding: 4px 16px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: var(--neon-green);
+      letter-spacing: 2px;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      z-index: 4;
+    }
+
+    .confirmed-badge.show {
+      display: flex;
+    }
+
     .flash {
       position: absolute;
       inset: 0;
@@ -341,7 +432,7 @@
       opacity: 0.4;
     }
 
-    /* Right panel */
+    /* Controls */
     .controls-panel {
       width: 280px;
       display: flex;
@@ -405,6 +496,41 @@
 
     input::placeholder {
       color: rgba(200, 230, 255, 0.2);
+    }
+
+    .liveness-card {
+      background: rgba(5, 15, 30, 0.8);
+      border: 1px solid rgba(255, 179, 0, 0.25);
+      border-radius: 12px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.3s;
+    }
+
+    .liveness-card.verified {
+      border-color: rgba(0, 255, 100, 0.3);
+    }
+
+    .liveness-card-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(200, 230, 255, 0.3);
+    }
+
+    .liveness-card-val {
+      font-family: 'Orbitron', monospace;
+      font-size: 11px;
+      color: rgba(255, 179, 0, 0.8);
+      letter-spacing: 2px;
+      transition: all 0.3s;
+    }
+
+    .liveness-card-val.verified {
+      color: var(--neon-green);
     }
 
     .status-card {
@@ -499,7 +625,6 @@
       transform: none;
     }
 
-    /* Result toast */
     .toast {
       position: fixed;
       bottom: 30px;
@@ -539,7 +664,6 @@
       line-height: 1.8;
     }
 
-    /* Hidden canvas for capture */
     canvas {
       display: none;
     }
@@ -570,9 +694,24 @@
     </div>
 
     <div class="main-layout">
-      <!-- Camera Feed -->
       <div class="camera-panel">
         <video id="videoFeed" class="camera-feed" autoplay playsinline muted></video>
+
+        <!-- Liveness overlay -->
+        <div class="liveness-overlay" id="livenessOverlay">
+          <div class="liveness-icon">👁️</div>
+          <div class="liveness-text">Blink to Verify</div>
+          <div class="liveness-sub">Anti-spoofing check active</div>
+          <div class="ear-bar-wrap">
+            <div class="ear-bar" id="earBar"></div>
+          </div>
+        </div>
+
+        <!-- Confirmed badge -->
+        <div class="confirmed-badge" id="confirmedBadge">
+          <div class="live-dot"></div>LIVENESS CONFIRMED
+        </div>
+
         <div class="flash" id="flash"></div>
         <div class="scan-overlay">
           <div class="scan-line" id="scanLine"></div>
@@ -581,12 +720,11 @@
           <div class="corner-bracket bl"></div>
           <div class="corner-bracket br"></div>
         </div>
-        <div class="cam-status" id="camStatus">
+        <div class="cam-status">
           <div class="live-dot"></div><span id="camStatusText">INITIALIZING</span>
         </div>
       </div>
 
-      <!-- Controls -->
       <div class="controls-panel">
         <div class="form-card">
           <div class="form-card-title">Session Details</div>
@@ -600,7 +738,12 @@
           </div>
         </div>
 
-        <div class="status-card" id="statusCard">
+        <div class="liveness-card" id="livenessCard">
+          <div class="liveness-card-label">Liveness Check</div>
+          <div class="liveness-card-val" id="livenessVal">PENDING</div>
+        </div>
+
+        <div class="status-card">
           <div class="status-label">Camera Status</div>
           <div class="status-val" id="statusVal">LOADING</div>
         </div>
@@ -612,18 +755,20 @@
           Capture &amp; Mark
         </button>
 
-        <div class="hint">Fill subject &amp; department<br />position face in frame<br />then press Capture</div>
+        <div class="hint" id="hintText">👁️ Blink once to verify<br />you are a real person</div>
       </div>
     </div>
   </div>
 
-  <!-- Hidden canvas for frame capture -->
   <canvas id="captureCanvas"></canvas>
-
-  <!-- Toast notification -->
   <div class="toast" id="toast"></div>
 
+  <!-- MediaPipe -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+
   <script>
+    // Elements
     const video = document.getElementById('videoFeed');
     const canvas = document.getElementById('captureCanvas');
     const scanBtn = document.getElementById('scanBtn');
@@ -632,8 +777,87 @@
     const toast = document.getElementById('toast');
     const flash = document.getElementById('flash');
     const scanLine = document.getElementById('scanLine');
+    const livenessOverlay = document.getElementById('livenessOverlay');
+    const confirmedBadge = document.getElementById('confirmedBadge');
+    const livenessCard = document.getElementById('livenessCard');
+    const livenessVal = document.getElementById('livenessVal');
+    const earBar = document.getElementById('earBar');
+    const hintText = document.getElementById('hintText');
 
-    // ── Init webcam ──────────────────────────────────────────────
+    // MediaPipe eye landmark indices
+    const LEFT_EYE = [362, 385, 387, 263, 373, 380];
+    const RIGHT_EYE = [33, 160, 158, 133, 153, 144];
+    const EAR_THRESHOLD = 0.20;
+    const CONSEC_FRAMES = 2;
+
+    let livenessVerified = false;
+    let eyeClosedFrames = 0;
+
+    // EAR calculation
+    function dist(p1, p2) {
+      return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+    }
+    function calcEAR(lm, idx) {
+      const [p1, p2, p3, p4, p5, p6] = idx.map(i => lm[i]);
+      return (dist(p2, p6) + dist(p3, p5)) / (2.0 * dist(p1, p4));
+    }
+
+    // MediaPipe Face Mesh
+    const faceMesh = new FaceMesh({
+      locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
+    });
+    faceMesh.setOptions({
+      maxNumFaces: 1,
+      refineLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+    faceMesh.onResults(results => {
+      if (livenessVerified) return;
+      if (!results.multiFaceLandmarks?.length) {
+        earBar.style.width = '0%';
+        return;
+      }
+      const lm = results.multiFaceLandmarks[0];
+      const avgEAR = (calcEAR(lm, LEFT_EYE) + calcEAR(lm, RIGHT_EYE)) / 2;
+      const barPct = Math.min(100, (avgEAR / 0.35) * 100);
+      earBar.style.width = barPct + '%';
+      earBar.style.background = avgEAR < EAR_THRESHOLD ? '#ff4455' : 'var(--neon-cyan)';
+
+      if (avgEAR < EAR_THRESHOLD) {
+        eyeClosedFrames++;
+      } else {
+        if (eyeClosedFrames >= CONSEC_FRAMES) confirmLiveness();
+        eyeClosedFrames = 0;
+      }
+    });
+
+    function confirmLiveness() {
+      livenessVerified = true;
+      livenessOverlay.classList.add('hidden');
+      confirmedBadge.classList.add('show');
+      livenessCard.classList.add('verified');
+      livenessVal.textContent = 'VERIFIED ✓';
+      livenessVal.classList.add('verified');
+      scanBtn.disabled = false;
+      setStatus('READY', false);
+      hintText.innerHTML = '✅ Liveness confirmed!<br/>Press Capture to mark attendance';
+      showToast('✅ Liveness verified! You may now capture.', false);
+    }
+
+    function resetLiveness() {
+      livenessVerified = false;
+      eyeClosedFrames = 0;
+      livenessOverlay.classList.remove('hidden');
+      confirmedBadge.classList.remove('show');
+      livenessCard.classList.remove('verified');
+      livenessVal.textContent = 'PENDING';
+      livenessVal.classList.remove('verified');
+      hintText.innerHTML = '👁️ Blink once to verify<br/>you are a real person';
+      scanBtn.disabled = true;
+    }
+
+    // Init camera + MediaPipe loop
     async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -643,86 +867,70 @@
         video.onloadedmetadata = () => {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
-          setStatus('READY', false);
           camStatusText.textContent = 'LIVE FEED';
-          scanBtn.disabled = false;
+          setStatus('BLINK NOW', false);
         };
+        const mpCam = new Camera(video, {
+          onFrame: async () => { if (!livenessVerified) await faceMesh.send({ image: video }); },
+          width: 1280, height: 720
+        });
+        mpCam.start();
       } catch (err) {
         setStatus('NO CAM', true);
         camStatusText.textContent = 'ERROR';
-        showToast('Camera access denied. Please allow camera permissions.', true);
-        console.error('Camera error:', err);
+        showToast('Camera access denied.', true);
       }
     }
 
-    // ── Capture frame → send to Flask ────────────────────────────
+    // Capture and send
     async function captureAndMark() {
+      if (!livenessVerified) { showToast('⚠️ Blink first to verify liveness.', true); return; }
       const subject = document.getElementById('subjectInput').value.trim() || 'General';
       const dept = document.getElementById('deptInput').value.trim() || 'General';
-
-      // UI: scanning state
       scanBtn.disabled = true;
       setStatus('SCANNING', true, true);
       triggerFlash();
       triggerScanLine();
-
-      // Draw current video frame to canvas
       const ctx = canvas.getContext('2d');
-      // Draw mirrored (match video mirror transform)
-      ctx.save();
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
-
-      // Get base64 JPEG (quality 0.85)
+      ctx.save(); ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height); ctx.restore();
       const imageData = canvas.toDataURL('image/jpeg', 0.85);
-
       try {
-        const response = await fetch('/mark_attendance', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const res = await fetch('/mark_attendance', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: imageData, subject, department: dept })
         });
-
-        const result = await response.json();
-
+        const result = await res.json();
         if (result.success) {
           showToast(result.message || '✅ Attendance marked!', false);
           setStatus('MARKED', false);
-          // Redirect to attendance page after 2s
-          setTimeout(() => { window.location.href = '/attendance'; }, 2000);
+          setTimeout(() => window.location.href = '/attendance', 2000);
         } else {
           showToast(result.message || '⚠️ Not recognized. Try again.', true);
           setStatus('RETRY', true);
-          scanBtn.disabled = false;
+          resetLiveness();
         }
       } catch (err) {
-        showToast('❌ Server error. Check Flask is running.', true);
+        showToast('❌ Server error.', true);
         setStatus('ERROR', true);
         scanBtn.disabled = false;
-        console.error('Fetch error:', err);
       }
     }
 
-    // ── UI helpers ───────────────────────────────────────────────
     function setStatus(text, isError = false, isScanning = false) {
       statusVal.textContent = text;
       statusVal.className = 'status-val' + (isError ? ' error' : '') + (isScanning ? ' scanning' : '');
     }
-
     function triggerFlash() {
       flash.classList.add('active');
       setTimeout(() => flash.classList.remove('active'), 150);
     }
-
     function triggerScanLine() {
       scanLine.classList.remove('active');
-      void scanLine.offsetWidth; // reflow to restart animation
+      void scanLine.offsetWidth;
       scanLine.classList.add('active');
       setTimeout(() => scanLine.classList.remove('active'), 1600);
     }
-
     function showToast(msg, isError = false) {
       toast.textContent = msg;
       toast.className = 'toast' + (isError ? ' error' : '');
@@ -730,7 +938,6 @@
       setTimeout(() => toast.classList.remove('show'), 4000);
     }
 
-    // ── Boot ─────────────────────────────────────────────────────
     initCamera();
   </script>
 </body>
