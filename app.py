@@ -399,6 +399,25 @@ def attendance():
         
     return render_template("attendance.html", data=data)
 
+# ================= EXPORT CSV =================
+@app.route('/export_csv')
+def export_csv():
+    if not session.get('logged_in'):
+        return redirect('/login')
+    import csv, io
+    result = supabase_client.table('attendance').select('*').execute()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['ID','Student ID','Name','Department','Class','Subject','Date','Time','Status'])
+    for r in (result.data or []):
+        writer.writerow([r.get('id'),r.get('student_id'),r.get('name'),r.get('department'),r.get('class'),r.get('subject'),r.get('date'),r.get('time'),r.get('status')])
+    output.seek(0)
+    from flask import make_response
+    response = make_response(output.getvalue())
+    response.headers['Content-Disposition'] = 'attachment; filename=attendance_report.csv'
+    response.headers['Content-Type'] = 'text/csv'
+    return response
+
 # ================= DASHBOARD =================
 @app.route('/dashboard')
 def dashboard():

@@ -19,6 +19,7 @@
       --neon-cyan: #00fff7;
       --neon-pink: #ff00e5;
       --neon-green: #00ff64;
+      --neon-amber: #ffb300;
       --dark: #020810;
       --text: #c8e6ff;
     }
@@ -127,15 +128,15 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 20px;
-      padding: 20px;
+      gap: 16px;
+      padding: 16px;
     }
 
     .top-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      width: min(960px, 95vw);
+      width: min(1000px, 95vw);
     }
 
     .back-btn {
@@ -205,12 +206,12 @@
 
     .main-layout {
       display: flex;
-      gap: 24px;
+      gap: 20px;
       align-items: flex-start;
-      width: min(960px, 95vw);
+      width: min(1000px, 95vw);
     }
 
-    /* Camera panel */
+    /* Camera */
     .camera-panel {
       flex: 1;
       background: rgba(5, 15, 30, 0.8);
@@ -245,12 +246,11 @@
       height: 2px;
       background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
       opacity: 0;
-      transition: opacity 0.3s;
     }
 
     .scan-line.active {
       opacity: 0.6;
-      animation: scanLine 1.5s ease-in-out;
+      animation: scanLine 1.5s ease-in-out infinite;
     }
 
     @keyframes scanLine {
@@ -323,7 +323,6 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      transition: all 0.3s;
     }
 
     /* Liveness overlay */
@@ -395,28 +394,65 @@
       transition: width 0.08s, background 0.15s;
     }
 
-    /* Confirmed badge */
-    .confirmed-badge {
+    /* Scanning pulse ring */
+    .scan-pulse {
+      position: absolute;
+      inset: 0;
+      border: 3px solid var(--neon-green);
+      border-radius: 16px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .scan-pulse.active {
+      animation: pulsRing 1s ease-out infinite;
+    }
+
+    @keyframes pulsRing {
+      0% {
+        opacity: 0.6;
+        transform: scale(1);
+      }
+
+      100% {
+        opacity: 0;
+        transform: scale(1.02);
+      }
+    }
+
+    /* Name overlay on camera */
+    .name-overlay {
       position: absolute;
       top: 12px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(0, 255, 100, 0.1);
-      border: 1px solid rgba(0, 255, 100, 0.4);
+      background: rgba(0, 255, 100, 0.15);
+      border: 1px solid rgba(0, 255, 100, 0.5);
       border-radius: 20px;
-      padding: 4px 16px;
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 10px;
+      padding: 6px 20px;
+      font-family: 'Orbitron', monospace;
+      font-size: 12px;
       color: var(--neon-green);
       letter-spacing: 2px;
       display: none;
-      align-items: center;
-      gap: 6px;
       z-index: 4;
+      animation: namePop 0.3s ease;
     }
 
-    .confirmed-badge.show {
-      display: flex;
+    .name-overlay.show {
+      display: block;
+    }
+
+    @keyframes namePop {
+      from {
+        transform: translateX(-50%) scale(0.8);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateX(-50%) scale(1);
+        opacity: 1;
+      }
     }
 
     .flash {
@@ -429,26 +465,26 @@
     }
 
     .flash.active {
-      opacity: 0.4;
+      opacity: 0.3;
     }
 
-    /* Controls */
+    /* Right panel */
     .controls-panel {
-      width: 280px;
+      width: 300px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 12px;
     }
 
     .form-card {
       background: rgba(5, 15, 30, 0.85);
       border: 1px solid rgba(0, 255, 247, 0.2);
       border-radius: 12px;
-      padding: 20px;
+      padding: 16px;
       backdrop-filter: blur(10px);
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 12px;
     }
 
     .form-card-title {
@@ -457,7 +493,7 @@
       letter-spacing: 3px;
       text-transform: uppercase;
       color: rgba(0, 255, 247, 0.5);
-      padding-bottom: 10px;
+      padding-bottom: 8px;
       border-bottom: 1px solid rgba(0, 255, 247, 0.1);
     }
 
@@ -479,7 +515,7 @@
       background: rgba(0, 255, 247, 0.03);
       border: 1px solid rgba(0, 255, 247, 0.15);
       border-radius: 8px;
-      padding: 10px 14px;
+      padding: 9px 14px;
       font-family: 'Rajdhani', sans-serif;
       font-size: 14px;
       color: var(--text);
@@ -491,138 +527,237 @@
     input:focus {
       border-color: rgba(0, 255, 247, 0.5);
       background: rgba(0, 255, 247, 0.06);
-      box-shadow: 0 0 16px rgba(0, 255, 247, 0.08);
     }
 
     input::placeholder {
       color: rgba(200, 230, 255, 0.2);
     }
 
-    .liveness-card {
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stat-box {
       background: rgba(5, 15, 30, 0.8);
-      border: 1px solid rgba(255, 179, 0, 0.25);
-      border-radius: 12px;
-      padding: 14px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      transition: all 0.3s;
+      border: 1px solid rgba(0, 255, 247, 0.15);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
     }
 
-    .liveness-card.verified {
-      border-color: rgba(0, 255, 100, 0.3);
-    }
-
-    .liveness-card-label {
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 9px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: rgba(200, 230, 255, 0.3);
-    }
-
-    .liveness-card-val {
+    .stat-num {
       font-family: 'Orbitron', monospace;
-      font-size: 11px;
-      color: rgba(255, 179, 0, 0.8);
-      letter-spacing: 2px;
-      transition: all 0.3s;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--neon-cyan);
     }
 
-    .liveness-card-val.verified {
+    .stat-num.green {
       color: var(--neon-green);
     }
 
-    .status-card {
-      background: rgba(5, 15, 30, 0.8);
-      border: 1px solid rgba(0, 255, 100, 0.2);
-      border-radius: 12px;
-      padding: 14px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      transition: all 0.3s;
-    }
-
-    .status-label {
+    .stat-lbl {
       font-family: 'Share Tech Mono', monospace;
-      font-size: 9px;
+      font-size: 8px;
+      color: rgba(200, 230, 255, 0.3);
       letter-spacing: 2px;
       text-transform: uppercase;
-      color: rgba(200, 230, 255, 0.3);
+      margin-top: 2px;
     }
 
-    .status-val {
-      font-family: 'Orbitron', monospace;
-      font-size: 13px;
-      color: #00ff64;
-      letter-spacing: 2px;
-      transition: all 0.3s;
-    }
-
-    .status-val.error {
-      color: #ff4455;
-    }
-
-    .status-val.scanning {
-      color: var(--neon-cyan);
-      animation: pulse 0.8s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-
-      0%,
-      100% {
-        opacity: 1;
-      }
-
-      50% {
-        opacity: 0.4;
-      }
-    }
-
-    .scan-btn {
+    /* Buttons */
+    .start-btn {
       width: 100%;
-      background: rgba(0, 255, 247, 0.08);
-      border: 1px solid rgba(0, 255, 247, 0.5);
+      background: rgba(0, 255, 100, 0.08);
+      border: 1px solid rgba(0, 255, 100, 0.5);
       border-radius: 12px;
-      padding: 16px;
+      padding: 14px;
       font-family: 'Orbitron', monospace;
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 3px;
       text-transform: uppercase;
-      color: var(--neon-cyan);
+      color: var(--neon-green);
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
       transition: all 0.3s;
-      box-shadow: 0 0 20px rgba(0, 255, 247, 0.08);
     }
 
-    .scan-btn svg {
-      width: 16px;
-      height: 16px;
+    .start-btn:hover:not(:disabled) {
+      background: rgba(0, 255, 100, 0.15);
+      box-shadow: 0 0 30px rgba(0, 255, 100, 0.2);
+    }
+
+    .start-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .start-btn svg {
+      width: 15px;
+      height: 15px;
       stroke: currentColor;
+    }
+
+    .stop-btn {
+      width: 100%;
+      background: rgba(255, 68, 85, 0.08);
+      border: 1px solid rgba(255, 68, 85, 0.5);
+      border-radius: 12px;
+      padding: 14px;
+      font-family: 'Orbitron', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #ff4455;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.3s;
+      display: none;
+    }
+
+    .stop-btn:hover {
+      background: rgba(255, 68, 85, 0.15);
+      box-shadow: 0 0 30px rgba(255, 68, 85, 0.2);
+    }
+
+    .stop-btn svg {
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+    }
+
+    /* Marked list */
+    .marked-card {
+      background: rgba(5, 15, 30, 0.85);
+      border: 1px solid rgba(0, 255, 247, 0.15);
+      border-radius: 12px;
+      overflow: hidden;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .marked-header {
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(0, 255, 247, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .marked-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: rgba(0, 255, 247, 0.5);
+    }
+
+    .marked-count {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: var(--neon-green);
+      letter-spacing: 1px;
+    }
+
+    .marked-list {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow-y: auto;
+      max-height: 180px;
+    }
+
+    .marked-list::-webkit-scrollbar {
+      width: 3px;
+    }
+
+    .marked-list::-webkit-scrollbar-thumb {
+      background: rgba(0, 255, 247, 0.15);
+      border-radius: 2px;
+    }
+
+    .marked-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(0, 255, 100, 0.05);
+      border: 1px solid rgba(0, 255, 100, 0.15);
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .marked-item.skipped {
+      background: rgba(255, 179, 0, 0.05);
+      border-color: rgba(255, 179, 0, 0.2);
+    }
+
+    .marked-item.unknown {
+      background: rgba(255, 68, 85, 0.05);
+      border-color: rgba(255, 68, 85, 0.2);
+    }
+
+    .marked-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--neon-green);
       flex-shrink: 0;
     }
 
-    .scan-btn:hover:not(:disabled) {
-      background: rgba(0, 255, 247, 0.15);
-      box-shadow: 0 0 40px rgba(0, 255, 247, 0.2);
-      transform: translateY(-2px);
+    .marked-dot.skipped {
+      background: var(--neon-amber);
     }
 
-    .scan-btn:active:not(:disabled) {
-      transform: scale(0.97);
+    .marked-dot.unknown {
+      background: #ff4455;
     }
 
-    .scan-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-      transform: none;
+    .marked-name {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: rgba(200, 230, 255, 0.8);
+      flex: 1;
+    }
+
+    .marked-time {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      color: rgba(200, 230, 255, 0.3);
+    }
+
+    .empty-list {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: rgba(200, 230, 255, 0.2);
+      text-align: center;
+      padding: 20px;
+      letter-spacing: 1px;
     }
 
     .toast {
@@ -633,7 +768,7 @@
       background: rgba(5, 15, 30, 0.95);
       border: 1px solid rgba(0, 255, 100, 0.4);
       border-radius: 12px;
-      padding: 14px 24px;
+      padding: 12px 24px;
       font-family: 'Share Tech Mono', monospace;
       font-size: 12px;
       color: var(--neon-green);
@@ -653,15 +788,6 @@
     .toast.error {
       border-color: rgba(255, 68, 85, 0.4);
       color: #ff4455;
-    }
-
-    .hint {
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 10px;
-      color: rgba(200, 230, 255, 0.2);
-      letter-spacing: 1px;
-      text-align: center;
-      line-height: 1.8;
     }
 
     canvas {
@@ -694,6 +820,7 @@
     </div>
 
     <div class="main-layout">
+      <!-- Camera -->
       <div class="camera-panel">
         <video id="videoFeed" class="camera-feed" autoplay playsinline muted></video>
 
@@ -701,16 +828,17 @@
         <div class="liveness-overlay" id="livenessOverlay">
           <div class="liveness-icon">👁️</div>
           <div class="liveness-text">Blink to Verify</div>
-          <div class="liveness-sub">Anti-spoofing check active</div>
+          <div class="liveness-sub">One-time anti-spoofing check</div>
           <div class="ear-bar-wrap">
             <div class="ear-bar" id="earBar"></div>
           </div>
         </div>
 
-        <!-- Confirmed badge -->
-        <div class="confirmed-badge" id="confirmedBadge">
-          <div class="live-dot"></div>LIVENESS CONFIRMED
-        </div>
+        <!-- Name overlay -->
+        <div class="name-overlay" id="nameOverlay"></div>
+
+        <!-- Scan pulse ring -->
+        <div class="scan-pulse" id="scanPulse"></div>
 
         <div class="flash" id="flash"></div>
         <div class="scan-overlay">
@@ -725,7 +853,10 @@
         </div>
       </div>
 
+      <!-- Controls -->
       <div class="controls-panel">
+
+        <!-- Session details -->
         <div class="form-card">
           <div class="form-card-title">Session Details</div>
           <div class="field">
@@ -738,24 +869,43 @@
           </div>
         </div>
 
-        <div class="liveness-card" id="livenessCard">
-          <div class="liveness-card-label">Liveness Check</div>
-          <div class="liveness-card-val" id="livenessVal">PENDING</div>
+        <!-- Stats -->
+        <div class="stats-row">
+          <div class="stat-box">
+            <div class="stat-num green" id="markedCount">0</div>
+            <div class="stat-lbl">Marked</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-num" id="scanCount">0</div>
+            <div class="stat-lbl">Scans</div>
+          </div>
         </div>
 
-        <div class="status-card">
-          <div class="status-label">Camera Status</div>
-          <div class="status-val" id="statusVal">LOADING</div>
-        </div>
-
-        <button class="scan-btn" id="scanBtn" onclick="captureAndMark()" disabled>
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+        <!-- Start/Stop buttons -->
+        <button class="start-btn" id="startBtn" onclick="startScanning()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3" />
           </svg>
-          Capture &amp; Mark
+          Start Scanning
+        </button>
+        <button class="stop-btn" id="stopBtn" onclick="stopScanning()">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+          </svg>
+          Stop Scanning
         </button>
 
-        <div class="hint" id="hintText">👁️ Blink once to verify<br />you are a real person</div>
+        <!-- Marked list -->
+        <div class="marked-card">
+          <div class="marked-header">
+            <div class="marked-title">Attendance Log</div>
+            <div class="marked-count" id="markedCountHeader">0 marked</div>
+          </div>
+          <div class="marked-list" id="markedList">
+            <div class="empty-list">No attendance marked yet</div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -763,101 +913,70 @@
   <canvas id="captureCanvas"></canvas>
   <div class="toast" id="toast"></div>
 
-  <!-- MediaPipe -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 
   <script>
-    // Elements
     const video = document.getElementById('videoFeed');
     const canvas = document.getElementById('captureCanvas');
-    const scanBtn = document.getElementById('scanBtn');
-    const statusVal = document.getElementById('statusVal');
     const camStatusText = document.getElementById('camStatusText');
     const toast = document.getElementById('toast');
     const flash = document.getElementById('flash');
     const scanLine = document.getElementById('scanLine');
     const livenessOverlay = document.getElementById('livenessOverlay');
-    const confirmedBadge = document.getElementById('confirmedBadge');
-    const livenessCard = document.getElementById('livenessCard');
-    const livenessVal = document.getElementById('livenessVal');
     const earBar = document.getElementById('earBar');
-    const hintText = document.getElementById('hintText');
+    const nameOverlay = document.getElementById('nameOverlay');
+    const scanPulse = document.getElementById('scanPulse');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const markedList = document.getElementById('markedList');
+    const markedCount = document.getElementById('markedCount');
+    const markedCountHdr = document.getElementById('markedCountHeader');
+    const scanCount = document.getElementById('scanCount');
 
-    // MediaPipe eye landmark indices
+    // MediaPipe
     const LEFT_EYE = [362, 385, 387, 263, 373, 380];
     const RIGHT_EYE = [33, 160, 158, 133, 153, 144];
     const EAR_THRESHOLD = 0.20;
     const CONSEC_FRAMES = 2;
+    const SCAN_INTERVAL = 3000; // scan every 3 seconds
 
     let livenessVerified = false;
     let eyeClosedFrames = 0;
+    let scanning = false;
+    let scanTimer = null;
+    let totalMarked = 0;
+    let totalScans = 0;
 
-    // EAR calculation
-    function dist(p1, p2) {
-      return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
-    }
+    function dist(p1, p2) { return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2); }
     function calcEAR(lm, idx) {
       const [p1, p2, p3, p4, p5, p6] = idx.map(i => lm[i]);
       return (dist(p2, p6) + dist(p3, p5)) / (2.0 * dist(p1, p4));
     }
 
-    // MediaPipe Face Mesh
     const faceMesh = new FaceMesh({
       locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
     });
-    faceMesh.setOptions({
-      maxNumFaces: 1,
-      refineLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
+    faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
     faceMesh.onResults(results => {
       if (livenessVerified) return;
-      if (!results.multiFaceLandmarks?.length) {
-        earBar.style.width = '0%';
-        return;
-      }
+      if (!results.multiFaceLandmarks?.length) { earBar.style.width = '0%'; return; }
       const lm = results.multiFaceLandmarks[0];
       const avgEAR = (calcEAR(lm, LEFT_EYE) + calcEAR(lm, RIGHT_EYE)) / 2;
-      const barPct = Math.min(100, (avgEAR / 0.35) * 100);
-      earBar.style.width = barPct + '%';
+      earBar.style.width = Math.min(100, (avgEAR / 0.35) * 100) + '%';
       earBar.style.background = avgEAR < EAR_THRESHOLD ? '#ff4455' : 'var(--neon-cyan)';
-
-      if (avgEAR < EAR_THRESHOLD) {
-        eyeClosedFrames++;
-      } else {
-        if (eyeClosedFrames >= CONSEC_FRAMES) confirmLiveness();
-        eyeClosedFrames = 0;
-      }
+      if (avgEAR < EAR_THRESHOLD) { eyeClosedFrames++; }
+      else { if (eyeClosedFrames >= CONSEC_FRAMES) confirmLiveness(); eyeClosedFrames = 0; }
     });
 
     function confirmLiveness() {
       livenessVerified = true;
       livenessOverlay.classList.add('hidden');
-      confirmedBadge.classList.add('show');
-      livenessCard.classList.add('verified');
-      livenessVal.textContent = 'VERIFIED ✓';
-      livenessVal.classList.add('verified');
-      scanBtn.disabled = false;
-      setStatus('READY', false);
-      hintText.innerHTML = '✅ Liveness confirmed!<br/>Press Capture to mark attendance';
-      showToast('✅ Liveness verified! You may now capture.', false);
+      startBtn.disabled = false;
+      camStatusText.textContent = 'READY';
+      showToast('✅ Liveness verified! Press Start Scanning.', false);
     }
 
-    function resetLiveness() {
-      livenessVerified = false;
-      eyeClosedFrames = 0;
-      livenessOverlay.classList.remove('hidden');
-      confirmedBadge.classList.remove('show');
-      livenessCard.classList.remove('verified');
-      livenessVal.textContent = 'PENDING';
-      livenessVal.classList.remove('verified');
-      hintText.innerHTML = '👁️ Blink once to verify<br/>you are a real person';
-      scanBtn.disabled = true;
-    }
-
-    // Init camera + MediaPipe loop
     async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -867,8 +986,7 @@
         video.onloadedmetadata = () => {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
-          camStatusText.textContent = 'LIVE FEED';
-          setStatus('BLINK NOW', false);
+          camStatusText.textContent = 'BLINK NOW';
         };
         const mpCam = new Camera(video, {
           onFrame: async () => { if (!livenessVerified) await faceMesh.send({ image: video }); },
@@ -876,66 +994,115 @@
         });
         mpCam.start();
       } catch (err) {
-        setStatus('NO CAM', true);
         camStatusText.textContent = 'ERROR';
         showToast('Camera access denied.', true);
       }
     }
 
-    // Capture and send
-    async function captureAndMark() {
-      if (!livenessVerified) { showToast('⚠️ Blink first to verify liveness.', true); return; }
+    function startScanning() {
       const subject = document.getElementById('subjectInput').value.trim() || 'General';
       const dept = document.getElementById('deptInput').value.trim() || 'General';
-      scanBtn.disabled = true;
-      setStatus('SCANNING', true, true);
-      triggerFlash();
-      triggerScanLine();
+      if (!subject || !dept) { showToast('Fill subject and department first.', true); return; }
+
+      scanning = true;
+      startBtn.style.display = 'none';
+      stopBtn.style.display = 'flex';
+      scanLine.classList.add('active');
+      scanPulse.classList.add('active');
+      camStatusText.textContent = 'SCANNING';
+      showToast('🔍 Auto-scanning started. Students step in!', false);
+
+      // Scan immediately then every SCAN_INTERVAL
+      autoScan();
+      scanTimer = setInterval(autoScan, SCAN_INTERVAL);
+    }
+
+    function stopScanning() {
+      scanning = false;
+      clearInterval(scanTimer);
+      scanTimer = null;
+      startBtn.style.display = 'flex';
+      stopBtn.style.display = 'none';
+      scanLine.classList.remove('active');
+      scanPulse.classList.remove('active');
+      camStatusText.textContent = 'STOPPED';
+      showToast(`Session ended. ${totalMarked} student(s) marked.`, false);
+    }
+
+    async function autoScan() {
+      if (!scanning) return;
+      const subject = document.getElementById('subjectInput').value.trim() || 'General';
+      const dept = document.getElementById('deptInput').value.trim() || 'General';
+
+      // Capture frame
       const ctx = canvas.getContext('2d');
       ctx.save(); ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height); ctx.restore();
       const imageData = canvas.toDataURL('image/jpeg', 0.85);
+
+      // Flash
+      flash.classList.add('active');
+      setTimeout(() => flash.classList.remove('active'), 100);
+
+      totalScans++;
+      scanCount.textContent = totalScans;
+
       try {
         const res = await fetch('/mark_attendance', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: imageData, subject, department: dept })
         });
         const result = await res.json();
+        const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
         if (result.success) {
-          showToast(result.message || '✅ Attendance marked!', false);
-          setStatus('MARKED', false);
-          setTimeout(() => window.location.href = '/attendance', 2000);
+          // Extract name from message "✅ Marked: Name"
+          const name = result.message.replace('✅ Marked: ', '');
+          addToLog(name, time, 'marked');
+          showNameOverlay('✅ ' + name);
+          totalMarked++;
+          markedCount.textContent = totalMarked;
+          markedCountHdr.textContent = totalMarked + ' marked';
+        } else if (result.message.includes('Already marked')) {
+          const name = result.message.replace('⚠️ Already marked today: ', '');
+          addToLog(name, time, 'skipped');
+          showNameOverlay('⚠️ ' + name);
+        } else if (result.message.includes('No face')) {
+          // No face — silent, don't spam log
         } else {
-          showToast(result.message || '⚠️ Not recognized. Try again.', true);
-          setStatus('RETRY', true);
-          resetLiveness();
+          addToLog('Unknown', time, 'unknown');
         }
       } catch (err) {
-        showToast('❌ Server error.', true);
-        setStatus('ERROR', true);
-        scanBtn.disabled = false;
+        console.error('Scan error:', err);
       }
     }
 
-    function setStatus(text, isError = false, isScanning = false) {
-      statusVal.textContent = text;
-      statusVal.className = 'status-val' + (isError ? ' error' : '') + (isScanning ? ' scanning' : '');
+    function addToLog(name, time, type) {
+      // Remove empty state
+      const empty = markedList.querySelector('.empty-list');
+      if (empty) empty.remove();
+
+      const item = document.createElement('div');
+      item.className = 'marked-item' + (type === 'skipped' ? ' skipped' : type === 'unknown' ? ' unknown' : '');
+      item.innerHTML = `
+      <div class="marked-dot${type === 'skipped' ? ' skipped' : type === 'unknown' ? ' unknown' : ''}"></div>
+      <div class="marked-name">${name}</div>
+      <div class="marked-time">${time}</div>
+    `;
+      markedList.prepend(item);
     }
-    function triggerFlash() {
-      flash.classList.add('active');
-      setTimeout(() => flash.classList.remove('active'), 150);
+
+    function showNameOverlay(text) {
+      nameOverlay.textContent = text;
+      nameOverlay.classList.add('show');
+      setTimeout(() => nameOverlay.classList.remove('show'), 2000);
     }
-    function triggerScanLine() {
-      scanLine.classList.remove('active');
-      void scanLine.offsetWidth;
-      scanLine.classList.add('active');
-      setTimeout(() => scanLine.classList.remove('active'), 1600);
-    }
+
     function showToast(msg, isError = false) {
       toast.textContent = msg;
       toast.className = 'toast' + (isError ? ' error' : '');
       toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 4000);
+      setTimeout(() => toast.classList.remove('show'), 3500);
     }
 
     initCamera();
