@@ -181,6 +181,12 @@ Export CSV → downloadable attendance report
 
 ---
 
+## 🗺️ Project Workflow
+
+[![View Flowchart](https://img.shields.io/badge/Figma-View%20Flowchart-purple?logo=figma)](https://www.figma.com/board/0sZlZNlQV1VcEwg6zwWtAL/AttendAI-%E2%80%94-Project-Workflow?node-id=0-1&p=f&t=MwvKWv2TLTeE7Iut-0)
+
+---
+
 ## 👁️ Liveness Detection
 
 AttendAI uses **MediaPipe Face Mesh** to compute the **Eye Aspect Ratio (EAR)** in real time. When EAR drops below threshold for 2+ consecutive frames, a blink is detected — confirming the face is real and not a photo or screen.
@@ -204,7 +210,7 @@ Photo    → EAR never drops → REJECTED ❌
 
 ---
 
-## 🗺️ Roadmap
+## 📍 Roadmap
 
 - [x] Browser-based webcam capture
 - [x] Liveness detection (anti-spoofing)
