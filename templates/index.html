@@ -1,339 +1,653 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>SmartAttend — AI Attendance System</title>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet"/>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;}
-:root{
-  --neon-cyan:#00fff7;
-  --neon-pink:#ff00e5;
-  --neon-blue:#0066ff;
-  --dark:#020810;
-  --dark2:#050f1e;
-  --dark3:#081525;
-  --grid:#0a2040;
-  --text:#c8e6ff;
-}
-html,body{width:100%;height:100%;overflow:hidden;}
-body{
-  background:var(--dark);
-  font-family:'Rajdhani',sans-serif;
-  color:var(--text);
-  position:relative;
-}
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AttendAI — AI Attendance System</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600&display=swap"
+    rel="stylesheet" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-/* Animated grid background */
-.grid-bg{
-  position:fixed;inset:0;
-  background-image:
-    linear-gradient(rgba(0,255,247,0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,255,247,0.04) 1px, transparent 1px);
-  background-size:60px 60px;
-  animation:gridMove 20s linear infinite;
-  pointer-events:none;
-  z-index:0;
-}
-@keyframes gridMove{
-  0%{background-position:0 0;}
-  100%{background-position:60px 60px;}
-}
+    :root {
+      --neon-cyan: #00fff7;
+      --neon-pink: #ff00e5;
+      --neon-blue: #0066ff;
+      --dark: #020810;
+      --dark2: #050f1e;
+      --dark3: #081525;
+      --grid: #0a2040;
+      --text: #c8e6ff;
+    }
 
-/* Radial glow */
-.glow-orb{
-  position:fixed;
-  border-radius:50%;
-  pointer-events:none;
-  z-index:0;
-  filter:blur(80px);
-  opacity:0.15;
-}
-.glow-orb.cyan{width:600px;height:600px;background:var(--neon-cyan);top:-200px;left:-100px;animation:orbFloat1 8s ease-in-out infinite;}
-.glow-orb.pink{width:500px;height:500px;background:var(--neon-pink);bottom:-200px;right:-100px;animation:orbFloat2 10s ease-in-out infinite;}
-@keyframes orbFloat1{0%,100%{transform:translate(0,0);}50%{transform:translate(60px,40px);}}
-@keyframes orbFloat2{0%,100%{transform:translate(0,0);}50%{transform:translate(-40px,-60px);}}
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
 
-/* Scanline overlay */
-.scanlines{
-  position:fixed;inset:0;
-  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px);
-  pointer-events:none;z-index:1;
-}
+    body {
+      background: var(--dark);
+      font-family: 'Rajdhani', sans-serif;
+      color: var(--text);
+      position: relative;
+    }
 
-/* Main layout */
-.container{
-  position:relative;z-index:2;
-  width:100vw;height:100vh;
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  gap:0;
-}
+    /* Animated grid background */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 255, 247, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 255, 247, 0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridMove 20s linear infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
 
-/* Header */
-.header{
-  text-align:center;
-  margin-bottom:48px;
-  animation:fadeDown 0.8s ease both;
-}
-@keyframes fadeDown{from{opacity:0;transform:translateY(-30px);}to{opacity:1;transform:translateY(0);}}
+    @keyframes gridMove {
+      0% {
+        background-position: 0 0;
+      }
 
-.logo-line{
-  display:flex;align-items:center;justify-content:center;gap:16px;
-  margin-bottom:8px;
-}
-.logo-icon{
-  width:48px;height:48px;
-  border:2px solid var(--neon-cyan);
-  border-radius:8px;
-  display:flex;align-items:center;justify-content:center;
-  position:relative;
-  box-shadow:0 0 20px var(--neon-cyan),inset 0 0 20px rgba(0,255,247,0.1);
-  animation:iconPulse 2s ease-in-out infinite;
-}
-@keyframes iconPulse{0%,100%{box-shadow:0 0 20px var(--neon-cyan),inset 0 0 20px rgba(0,255,247,0.1);}50%{box-shadow:0 0 40px var(--neon-cyan),inset 0 0 30px rgba(0,255,247,0.2);}}
-.logo-icon svg{width:28px;height:28px;stroke:var(--neon-cyan);}
+      100% {
+        background-position: 60px 60px;
+      }
+    }
 
-h1{
-  font-family:'Orbitron',monospace;
-  font-size:clamp(28px,4vw,52px);
-  font-weight:900;
-  letter-spacing:6px;
-  text-transform:uppercase;
-  background:linear-gradient(90deg,var(--neon-cyan),#fff,var(--neon-pink));
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  background-clip:text;
-  filter:drop-shadow(0 0 20px rgba(0,255,247,0.5));
-}
-.subtitle{
-  font-family:'Share Tech Mono',monospace;
-  font-size:13px;
-  color:rgba(200,230,255,0.5);
-  letter-spacing:4px;
-  text-transform:uppercase;
-  margin-top:6px;
-}
+    /* Radial glows */
+    .glow-orb {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+      filter: blur(90px);
+      opacity: 0.13;
+    }
 
-/* Status bar */
-.status-bar{
-  display:flex;align-items:center;gap:8px;
-  margin-top:16px;
-  font-family:'Share Tech Mono',monospace;
-  font-size:11px;
-  color:rgba(0,255,247,0.6);
-  letter-spacing:2px;
-}
-.status-dot{
-  width:6px;height:6px;border-radius:50%;
-  background:var(--neon-cyan);
-  animation:blink 1.5s ease-in-out infinite;
-}
-@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.2;}}
+    .glow-orb.cyan {
+      width: 650px;
+      height: 650px;
+      background: var(--neon-cyan);
+      top: -220px;
+      left: -120px;
+      animation: orbFloat1 8s ease-in-out infinite;
+    }
 
-/* Nav cards */
-.nav-grid{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:20px;
-  width:min(900px,90vw);
-  animation:fadeUp 0.8s ease 0.3s both;
-}
-/* Last 2 cards center themselves in the final row */
-.nav-card:nth-child(4){grid-column:1/2;margin-left:calc(50% + 10px);}
-.nav-card:nth-child(5){grid-column:2/3;margin-left:0;}
-@keyframes fadeUp{from{opacity:0;transform:translateY(40px);}to{opacity:1;transform:translateY(0);}}
+    .glow-orb.pink {
+      width: 500px;
+      height: 500px;
+      background: var(--neon-pink);
+      bottom: -200px;
+      right: -100px;
+      animation: orbFloat2 10s ease-in-out infinite;
+    }
 
-.nav-card{
-  position:relative;
-  background:rgba(5,15,30,0.8);
-  border:1px solid rgba(0,255,247,0.15);
-  border-radius:12px;
-  padding:32px 24px;
-  text-decoration:none;
-  color:var(--text);
-  cursor:pointer;
-  overflow:hidden;
-  transition:all 0.3s ease;
-  display:flex;flex-direction:column;align-items:center;gap:16px;
-  backdrop-filter:blur(10px);
-}
-.nav-card::before{
-  content:'';position:absolute;inset:0;
-  background:linear-gradient(135deg,rgba(0,255,247,0.05),transparent);
-  opacity:0;transition:opacity 0.3s;
-}
-.nav-card::after{
-  content:'';
-  position:absolute;
-  top:0;left:-100%;width:100%;height:1px;
-  background:linear-gradient(90deg,transparent,var(--neon-cyan),transparent);
-  transition:left 0.5s ease;
-}
-.nav-card:hover{
-  border-color:rgba(0,255,247,0.6);
-  transform:translateY(-4px);
-  box-shadow:0 0 30px rgba(0,255,247,0.15),0 20px 40px rgba(0,0,0,0.4);
-}
-.nav-card:hover::before{opacity:1;}
-.nav-card:hover::after{left:100%;}
+    /* Extra subtle mid glow for depth */
+    .glow-orb.blue {
+      width: 400px;
+      height: 400px;
+      background: var(--neon-blue);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      opacity: 0.04;
+    }
 
-.card-icon{
-  width:56px;height:56px;
-  border-radius:12px;
-  display:flex;align-items:center;justify-content:center;
-  position:relative;
-}
-.card-icon svg{width:28px;height:28px;position:relative;z-index:1;}
+    @keyframes orbFloat1 {
 
-.icon-cyan{background:rgba(0,255,247,0.1);border:1px solid rgba(0,255,247,0.3);}
-.icon-cyan svg{stroke:var(--neon-cyan);}
-.icon-pink{background:rgba(255,0,229,0.1);border:1px solid rgba(255,0,229,0.3);}
-.icon-pink svg{stroke:var(--neon-pink);}
-.icon-blue{background:rgba(0,102,255,0.1);border:1px solid rgba(0,102,255,0.4);}
-.icon-blue svg{stroke:#4da6ff;}
-.icon-green{background:rgba(0,255,100,0.1);border:1px solid rgba(0,255,100,0.3);}
-.icon-green svg{stroke:#00ff64;}
-.icon-amber{background:rgba(255,180,0,0.1);border:1px solid rgba(255,180,0,0.3);}
-.icon-amber svg{stroke:#ffb400;}
+      0%,
+      100% {
+        transform: translate(0, 0);
+      }
 
-.card-label{
-  font-family:'Orbitron',monospace;
-  font-size:11px;
-  letter-spacing:3px;
-  text-transform:uppercase;
-  color:rgba(200,230,255,0.9);
-  text-align:center;
-}
-.card-desc{
-  font-size:12px;
-  color:rgba(200,230,255,0.4);
-  text-align:center;
-  letter-spacing:1px;
-  line-height:1.5;
-}
+      50% {
+        transform: translate(60px, 40px);
+      }
+    }
 
-/* Corner decorations */
-.corner{
-  position:fixed;
-  width:60px;height:60px;
-  z-index:2;
-  opacity:0.4;
-}
-.corner.tl{top:20px;left:20px;border-top:2px solid var(--neon-cyan);border-left:2px solid var(--neon-cyan);}
-.corner.tr{top:20px;right:20px;border-top:2px solid var(--neon-cyan);border-right:2px solid var(--neon-cyan);}
-.corner.bl{bottom:20px;left:20px;border-bottom:2px solid var(--neon-cyan);border-left:2px solid var(--neon-cyan);}
-.corner.br{bottom:20px;right:20px;border-bottom:2px solid var(--neon-cyan);border-right:2px solid var(--neon-cyan);}
+    @keyframes orbFloat2 {
 
-/* Bottom info */
-.bottom-bar{
-  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
-  font-family:'Share Tech Mono',monospace;
-  font-size:10px;color:rgba(200,230,255,0.2);
-  letter-spacing:3px;text-transform:uppercase;
-  z-index:2;
-}
+      0%,
+      100% {
+        transform: translate(0, 0);
+      }
 
-/* Stagger animation for cards */
-.nav-card:nth-child(1){animation-delay:0.1s;}
-.nav-card:nth-child(2){animation-delay:0.2s;}
-.nav-card:nth-child(3){animation-delay:0.3s;}
-.nav-card:nth-child(4){animation-delay:0.4s;}
-.nav-card:nth-child(5){animation-delay:0.5s;}
-.nav-card:nth-child(6){animation-delay:0.6s;}
-.nav-card{animation:cardIn 0.6s ease both;}
-@keyframes cardIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
-</style>
+      50% {
+        transform: translate(-40px, -60px);
+      }
+    }
+
+    /* Scanlines */
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(0deg,
+          transparent, transparent 2px,
+          rgba(0, 0, 0, 0.07) 2px, rgba(0, 0, 0, 0.07) 4px);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* ── LAYOUT ── */
+    .container {
+      position: relative;
+      z-index: 2;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      padding: 0 24px;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      animation: fadeDown 0.8s ease both;
+    }
+
+    @keyframes fadeDown {
+      from {
+        opacity: 0;
+        transform: translateY(-30px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .logo-line {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      margin-bottom: 10px;
+    }
+
+    .logo-icon {
+      width: 52px;
+      height: 52px;
+      border: 1.5px solid var(--neon-cyan);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      box-shadow: 0 0 24px var(--neon-cyan), inset 0 0 16px rgba(0, 255, 247, 0.08);
+      animation: iconPulse 2.5s ease-in-out infinite;
+    }
+
+    @keyframes iconPulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 20px var(--neon-cyan), inset 0 0 16px rgba(0, 255, 247, 0.08);
+      }
+
+      50% {
+        box-shadow: 0 0 40px var(--neon-cyan), inset 0 0 28px rgba(0, 255, 247, 0.18);
+      }
+    }
+
+    .logo-icon svg {
+      width: 28px;
+      height: 28px;
+      stroke: var(--neon-cyan);
+    }
+
+    h1 {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(28px, 4vw, 50px);
+      font-weight: 900;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, var(--neon-cyan), #fff 50%, var(--neon-pink));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 18px rgba(0, 255, 247, 0.4));
+    }
+
+    .subtitle {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+      color: rgba(200, 230, 255, 0.45);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-top: 6px;
+    }
+
+    /* Thin horizontal rule */
+    .header-rule {
+      width: 240px;
+      height: 1px;
+      margin: 14px auto 0;
+      background: linear-gradient(90deg, transparent, rgba(0, 255, 247, 0.35), transparent);
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 12px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: rgba(0, 255, 247, 0.55);
+      letter-spacing: 2px;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--neon-cyan);
+      animation: blink 1.5s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.2;
+      }
+    }
+
+    /* ── NAV GRID — 3 + 2 balanced ── */
+    .nav-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      width: min(940px, 92vw);
+      animation: fadeUp 0.8s ease 0.3s both;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(40px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Row 1: 3 cards */
+    .nav-row {
+      display: flex;
+      gap: 16px;
+      width: 100%;
+      justify-content: center;
+    }
+
+    /* Row 2: 2 cards — slightly wider, centered */
+    .nav-row.row-2 {
+      width: calc(66.66% + 11px);
+      /* matches 2/3 of row-1 + 1 gap */
+    }
+
+    .nav-card {
+      position: relative;
+      background: rgba(5, 15, 30, 0.75);
+      border: 1px solid rgba(0, 255, 247, 0.12);
+      border-radius: 14px;
+      padding: 28px 20px 24px;
+      text-decoration: none;
+      color: var(--text);
+      cursor: pointer;
+      overflow: hidden;
+      transition: border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      backdrop-filter: blur(12px);
+      flex: 1;
+    }
+
+    /* Top accent line — hidden by default */
+    .nav-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 10%;
+      right: 10%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    /* Sweep shimmer */
+    .nav-card::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 60%;
+      height: 100%;
+      background: linear-gradient(105deg, transparent, rgba(0, 255, 247, 0.04), transparent);
+      transition: left 0.6s ease;
+    }
+
+    .nav-card:hover {
+      border-color: rgba(0, 255, 247, 0.45);
+      transform: translateY(-5px);
+      box-shadow:
+        0 0 28px rgba(0, 255, 247, 0.1),
+        0 24px 48px rgba(0, 0, 0, 0.5);
+    }
+
+    .nav-card:hover::before {
+      opacity: 1;
+    }
+
+    .nav-card:hover::after {
+      left: 150%;
+    }
+
+    /* Card icon */
+    .card-icon {
+      width: 54px;
+      height: 54px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-icon svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    .icon-cyan {
+      background: rgba(0, 255, 247, 0.08);
+      border: 1px solid rgba(0, 255, 247, 0.25);
+    }
+
+    .icon-cyan svg {
+      stroke: var(--neon-cyan);
+    }
+
+    .icon-pink {
+      background: rgba(255, 0, 229, 0.08);
+      border: 1px solid rgba(255, 0, 229, 0.25);
+    }
+
+    .icon-pink svg {
+      stroke: var(--neon-pink);
+    }
+
+    .icon-blue {
+      background: rgba(0, 102, 255, 0.08);
+      border: 1px solid rgba(0, 102, 255, 0.35);
+    }
+
+    .icon-blue svg {
+      stroke: #4da6ff;
+    }
+
+    .icon-green {
+      background: rgba(0, 255, 100, 0.08);
+      border: 1px solid rgba(0, 255, 100, 0.25);
+    }
+
+    .icon-green svg {
+      stroke: #00ff64;
+    }
+
+    .icon-purple {
+      background: rgba(160, 80, 255, 0.08);
+      border: 1px solid rgba(160, 80, 255, 0.28);
+    }
+
+    .icon-purple svg {
+      stroke: #b060ff;
+    }
+
+    /* Card text */
+    .card-label {
+      font-family: 'Orbitron', monospace;
+      font-size: 10px;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: rgba(200, 230, 255, 0.92);
+      text-align: center;
+    }
+
+    .card-desc {
+      font-size: 12px;
+      color: rgba(200, 230, 255, 0.38);
+      text-align: center;
+      letter-spacing: 0.5px;
+      line-height: 1.5;
+    }
+
+    /* Stagger */
+    .nav-card {
+      animation: cardIn 0.6s ease both;
+    }
+
+    @keyframes cardIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .nav-row:nth-child(1) .nav-card:nth-child(1) {
+      animation-delay: 0.10s;
+    }
+
+    .nav-row:nth-child(1) .nav-card:nth-child(2) {
+      animation-delay: 0.20s;
+    }
+
+    .nav-row:nth-child(1) .nav-card:nth-child(3) {
+      animation-delay: 0.30s;
+    }
+
+    .nav-row:nth-child(2) .nav-card:nth-child(1) {
+      animation-delay: 0.40s;
+    }
+
+    .nav-row:nth-child(2) .nav-card:nth-child(2) {
+      animation-delay: 0.50s;
+    }
+
+    /* ── Corner decorations ── */
+    .corner {
+      position: fixed;
+      width: 56px;
+      height: 56px;
+      z-index: 2;
+      opacity: 0.35;
+    }
+
+    .corner.tl {
+      top: 20px;
+      left: 20px;
+      border-top: 1.5px solid var(--neon-cyan);
+      border-left: 1.5px solid var(--neon-cyan);
+    }
+
+    .corner.tr {
+      top: 20px;
+      right: 20px;
+      border-top: 1.5px solid var(--neon-cyan);
+      border-right: 1.5px solid var(--neon-cyan);
+    }
+
+    .corner.bl {
+      bottom: 20px;
+      left: 20px;
+      border-bottom: 1.5px solid var(--neon-cyan);
+      border-left: 1.5px solid var(--neon-cyan);
+    }
+
+    .corner.br {
+      bottom: 20px;
+      right: 20px;
+      border-bottom: 1.5px solid var(--neon-cyan);
+      border-right: 1.5px solid var(--neon-cyan);
+    }
+
+    /* ── Bottom bar ── */
+    .bottom-bar {
+      position: fixed;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      color: rgba(200, 230, 255, 0.18);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      z-index: 2;
+      white-space: nowrap;
+    }
+  </style>
 </head>
+
 <body>
-<div class="grid-bg"></div>
-<div class="glow-orb cyan"></div>
-<div class="glow-orb pink"></div>
-<div class="scanlines"></div>
-<div class="corner tl"></div>
-<div class="corner tr"></div>
-<div class="corner bl"></div>
-<div class="corner br"></div>
+  <div class="grid-bg"></div>
+  <div class="glow-orb cyan"></div>
+  <div class="glow-orb pink"></div>
+  <div class="glow-orb blue"></div>
+  <div class="scanlines"></div>
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
 
-<div class="container">
-  <div class="header">
-    <div class="logo-line">
-      <div class="logo-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-          <path d="M18 3l1.5 1.5M20 8h2M18 13l1.5-1.5"/>
-        </svg>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="logo-line">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+            <path d="M18 3l1.5 1.5M20 8h2M18 13l1.5-1.5" />
+          </svg>
+        </div>
+        <h1>AttendAI</h1>
       </div>
-      <h1>SmartAttend</h1>
+      <div class="subtitle">AI-Powered Face Recognition System</div>
+      <div class="header-rule"></div>
+      <div class="status-bar">
+        <div class="status-dot"></div>
+        SYSTEM ONLINE &nbsp;|&nbsp; FACE ENGINE READY &nbsp;|&nbsp; DATABASE CONNECTED
+      </div>
     </div>
-    <div class="subtitle">AI-Powered Face Recognition System</div>
-    <div class="status-bar">
-      <div class="status-dot"></div>
-      SYSTEM ONLINE &nbsp;|&nbsp; FACE ENGINE READY &nbsp;|&nbsp; DATABASE CONNECTED
+
+    <!-- Nav grid: row of 3 + row of 2 -->
+    <div class="nav-section">
+
+      <!-- Row 1 -->
+      <div class="nav-row">
+        <a href="/register" class="nav-card">
+          <div class="card-icon icon-cyan">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <line x1="19" y1="8" x2="19" y2="14" />
+              <line x1="22" y1="11" x2="16" y2="11" />
+            </svg>
+          </div>
+          <div class="card-label">Register Student</div>
+          <div class="card-desc">Enroll new student with face capture</div>
+        </a>
+
+        <a href="/camera" class="nav-card">
+          <div class="card-icon icon-pink">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 7l-7 5 7 5V7z" />
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+            </svg>
+          </div>
+          <div class="card-label">Mark Attendance</div>
+          <div class="card-desc">Scan face to record presence</div>
+        </a>
+
+        <a href="/attendance" class="nav-card">
+          <div class="card-icon icon-blue">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+          </div>
+          <div class="card-label">Attendance Records</div>
+          <div class="card-desc">View all attendance logs</div>
+        </a>
+      </div>
+
+      <!-- Row 2 -->
+      <div class="nav-row row-2">
+        <a href="/dashboard" class="nav-card">
+          <div class="card-icon icon-green">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+          </div>
+          <div class="card-label">Dashboard</div>
+          <div class="card-desc">Analytics and department stats</div>
+        </a>
+
+        <a href="/session" class="nav-card">
+          <div class="card-icon icon-purple">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+              <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" />
+            </svg>
+          </div>
+          <div class="card-label">Class Session</div>
+          <div class="card-desc">Set professor, day &amp; time slot</div>
+        </a>
+      </div>
+
     </div>
   </div>
 
-  <div class="nav-grid">
-    <a href="/register" class="nav-card">
-      <div class="card-icon icon-cyan">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-          <circle cx="9" cy="7" r="4"/>
-          <line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>
-        </svg>
-      </div>
-      <div class="card-label">Register Student</div>
-      <div class="card-desc">Enroll new student with face capture</div>
-    </a>
-
-    <a href="/camera" class="nav-card">
-      <div class="card-icon icon-pink">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-        </svg>
-      </div>
-      <div class="card-label">Mark Attendance</div>
-      <div class="card-desc">Scan face to record presence</div>
-    </a>
-
-    <a href="/attendance" class="nav-card">
-      <div class="card-icon icon-blue">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-          <polyline points="10 9 9 9 8 9"/>
-        </svg>
-      </div>
-      <div class="card-label">Attendance Records</div>
-      <div class="card-desc">View all attendance logs</div>
-    </a>
-
-    <a href="/dashboard" class="nav-card">
-      <div class="card-icon icon-green">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-          <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-        </svg>
-      </div>
-      <div class="card-label">Dashboard</div>
-      <div class="card-desc">Analytics and department stats</div>
-    </a>
-
-    <a href="/session" class="nav-card">
-      <div class="card-icon" style="background:rgba(160,80,255,0.1);border:1px solid rgba(160,80,255,0.3);">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="stroke:#b060ff;">
-          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
-          <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-          <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
-        </svg>
-      </div>
-      <div class="card-label">Class Session</div>
-      <div class="card-desc">Set professor, day &amp; time slot</div>
-    </a>
-  </div>
-</div>
-
-<div class="bottom-bar">SMARTATTEND v2.0 &nbsp;·&nbsp; AI ATTENDANCE SYSTEM &nbsp;·&nbsp; POWERED BY OPENCV</div>
+  <div class="bottom-bar">AttendAI.0 &nbsp;·&nbsp; AI ATTENDANCE SYSTEM &nbsp;·&nbsp; POWERED BY OPENCV</div>
 </body>
+
 </html>

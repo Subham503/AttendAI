@@ -1,130 +1,455 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Dashboard — SmartAttend</title>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet"/>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;}
-:root{--neon-cyan:#00fff7;--neon-pink:#ff00e5;--dark:#020810;--text:#c8e6ff;}
-html,body{width:100%;height:100%;overflow:hidden;}
-body{background:var(--dark);font-family:'Rajdhani',sans-serif;color:var(--text);}
-.grid-bg{position:fixed;inset:0;background-image:linear-gradient(rgba(0,255,247,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,247,0.03) 1px,transparent 1px);background-size:60px 60px;animation:gridMove 20s linear infinite;pointer-events:none;z-index:0;}
-@keyframes gridMove{0%{background-position:0 0;}100%{background-position:60px 60px;}}
-.glow-orb{position:fixed;border-radius:50%;pointer-events:none;z-index:0;filter:blur(80px);opacity:0.1;}
-.glow-orb.cyan{width:500px;height:500px;background:var(--neon-cyan);top:-100px;left:-100px;}
-.glow-orb.pink{width:500px;height:500px;background:var(--neon-pink);bottom:-100px;right:-100px;}
-.scanlines{position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px);pointer-events:none;z-index:1;}
-.corner{position:fixed;width:50px;height:50px;z-index:2;opacity:0.3;}
-.corner.tl{top:16px;left:16px;border-top:2px solid var(--neon-cyan);border-left:2px solid var(--neon-cyan);}
-.corner.tr{top:16px;right:16px;border-top:2px solid var(--neon-cyan);border-right:2px solid var(--neon-cyan);}
-.corner.bl{bottom:16px;left:16px;border-bottom:2px solid var(--neon-cyan);border-left:2px solid var(--neon-cyan);}
-.corner.br{bottom:16px;right:16px;border-bottom:2px solid var(--neon-cyan);border-right:2px solid var(--neon-cyan);}
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — AttendAI</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600&display=swap"
+    rel="stylesheet" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-.page{position:relative;z-index:2;width:100vw;height:100vh;display:flex;flex-direction:column;padding:24px 32px;gap:20px;overflow:hidden;}
+    :root {
+      --neon-cyan: #00fff7;
+      --neon-pink: #ff00e5;
+      --dark: #020810;
+      --text: #c8e6ff;
+    }
 
-.top-bar{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
-.back-btn{display:inline-flex;align-items:center;gap:8px;font-family:'Share Tech Mono',monospace;font-size:11px;color:rgba(0,255,247,0.5);letter-spacing:2px;text-decoration:none;text-transform:uppercase;transition:color 0.2s;}
-.back-btn:hover{color:var(--neon-cyan);}
-.back-btn svg{width:14px;height:14px;stroke:currentColor;}
-.page-title{font-family:'Orbitron',monospace;font-size:20px;font-weight:700;letter-spacing:4px;text-transform:uppercase;background:linear-gradient(90deg,var(--neon-cyan),#fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-.live-badge{display:flex;align-items:center;gap:6px;font-family:'Share Tech Mono',monospace;font-size:10px;color:rgba(0,255,100,0.7);letter-spacing:2px;}
-.live-dot{width:6px;height:6px;border-radius:50%;background:#00ff64;animation:blink 1.5s ease-in-out infinite;}
-@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.2;}}
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
 
-/* Dashboard grid */
-.dash-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;gap:20px;overflow:hidden;}
+    body {
+      background: var(--dark);
+      font-family: 'Rajdhani', sans-serif;
+      color: var(--text);
+    }
 
-/* Stat cards row */
-.stats-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
-.stat-card{
-  background:rgba(5,15,30,0.8);border:1px solid rgba(0,255,247,0.15);
-  border-radius:12px;padding:20px;
-  display:flex;flex-direction:column;gap:6px;
-  backdrop-filter:blur(10px);
-  animation:cardIn 0.5s ease both;
-}
-.stat-card:nth-child(1){animation-delay:0.05s;border-color:rgba(0,255,247,0.2);}
-.stat-card:nth-child(2){animation-delay:0.1s;border-color:rgba(0,255,100,0.2);}
-.stat-card:nth-child(3){animation-delay:0.15s;border-color:rgba(255,0,229,0.2);}
-.stat-card:nth-child(4){animation-delay:0.2s;border-color:rgba(255,180,0,0.2);}
-@keyframes cardIn{from{opacity:0;transform:translateY(15px);}to{opacity:1;transform:translateY(0);}}
-.stat-label{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:rgba(200,230,255,0.3);}
-.stat-value{font-family:'Orbitron',monospace;font-size:28px;font-weight:700;}
-.stat-value.cyan{color:var(--neon-cyan);text-shadow:0 0 20px rgba(0,255,247,0.4);}
-.stat-value.green{color:#00ff64;text-shadow:0 0 20px rgba(0,255,100,0.4);}
-.stat-value.pink{color:var(--neon-pink);text-shadow:0 0 20px rgba(255,0,229,0.4);}
-.stat-value.amber{color:#ffb400;text-shadow:0 0 20px rgba(255,180,0,0.4);}
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image: linear-gradient(rgba(0, 255, 247, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 247, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridMove 20s linear infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
 
-/* Chart panels */
-.chart-panel{
-  background:rgba(5,15,30,0.8);border:1px solid rgba(0,255,247,0.15);
-  border-radius:12px;padding:24px;
-  display:flex;flex-direction:column;gap:16px;
-  overflow:hidden;
-  animation:cardIn 0.5s ease 0.3s both;
-}
-.chart-title{font-family:'Orbitron',monospace;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:rgba(0,255,247,0.6);}
-.chart-body{flex:1;display:flex;flex-direction:column;gap:10px;overflow-y:auto;}
-.chart-body::-webkit-scrollbar{width:3px;}
-.chart-body::-webkit-scrollbar-thumb{background:rgba(0,255,247,0.15);border-radius:2px;}
+    @keyframes gridMove {
+      0% {
+        background-position: 0 0;
+      }
 
-.bar-row{display:flex;align-items:center;gap:12px;}
-.bar-name{font-family:'Share Tech Mono',monospace;font-size:11px;color:rgba(200,230,255,0.6);letter-spacing:1px;min-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.bar-track{flex:1;height:6px;background:rgba(0,255,247,0.06);border-radius:3px;overflow:hidden;}
-.bar-fill{height:100%;border-radius:3px;transition:width 1s ease;}
-.bar-fill.cyan{background:linear-gradient(90deg,rgba(0,255,247,0.4),var(--neon-cyan));}
-.bar-fill.pink{background:linear-gradient(90deg,rgba(255,0,229,0.4),var(--neon-pink));}
-.bar-count{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--neon-cyan);min-width:30px;text-align:right;}
+      100% {
+        background-position: 60px 60px;
+      }
+    }
 
-.empty-msg{font-family:'Share Tech Mono',monospace;font-size:11px;color:rgba(200,230,255,0.2);letter-spacing:2px;text-align:center;margin:auto;}
-</style>
+    .glow-orb {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+      filter: blur(80px);
+      opacity: 0.1;
+    }
+
+    .glow-orb.cyan {
+      width: 500px;
+      height: 500px;
+      background: var(--neon-cyan);
+      top: -100px;
+      left: -100px;
+    }
+
+    .glow-orb.pink {
+      width: 500px;
+      height: 500px;
+      background: var(--neon-pink);
+      bottom: -100px;
+      right: -100px;
+    }
+
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.07) 2px, rgba(0, 0, 0, 0.07) 4px);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .corner {
+      position: fixed;
+      width: 50px;
+      height: 50px;
+      z-index: 2;
+      opacity: 0.3;
+    }
+
+    .corner.tl {
+      top: 16px;
+      left: 16px;
+      border-top: 2px solid var(--neon-cyan);
+      border-left: 2px solid var(--neon-cyan);
+    }
+
+    .corner.tr {
+      top: 16px;
+      right: 16px;
+      border-top: 2px solid var(--neon-cyan);
+      border-right: 2px solid var(--neon-cyan);
+    }
+
+    .corner.bl {
+      bottom: 16px;
+      left: 16px;
+      border-bottom: 2px solid var(--neon-cyan);
+      border-left: 2px solid var(--neon-cyan);
+    }
+
+    .corner.br {
+      bottom: 16px;
+      right: 16px;
+      border-bottom: 2px solid var(--neon-cyan);
+      border-right: 2px solid var(--neon-cyan);
+    }
+
+    .page {
+      position: relative;
+      z-index: 2;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 24px 32px;
+      gap: 20px;
+      overflow: hidden;
+    }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: rgba(0, 255, 247, 0.5);
+      letter-spacing: 2px;
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    .back-btn:hover {
+      color: var(--neon-cyan);
+    }
+
+    .back-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+    }
+
+    .page-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, var(--neon-cyan), #fff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .live-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: rgba(0, 255, 100, 0.7);
+      letter-spacing: 2px;
+    }
+
+    .live-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #00ff64;
+      animation: blink 1.5s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.2;
+      }
+    }
+
+    /* Dashboard grid */
+    .dash-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto 1fr;
+      gap: 20px;
+      overflow: hidden;
+    }
+
+    /* Stat cards row */
+    .stats-row {
+      grid-column: 1/-1;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .stat-card {
+      background: rgba(5, 15, 30, 0.8);
+      border: 1px solid rgba(0, 255, 247, 0.15);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      backdrop-filter: blur(10px);
+      animation: cardIn 0.5s ease both;
+    }
+
+    .stat-card:nth-child(1) {
+      animation-delay: 0.05s;
+      border-color: rgba(0, 255, 247, 0.2);
+    }
+
+    .stat-card:nth-child(2) {
+      animation-delay: 0.1s;
+      border-color: rgba(0, 255, 100, 0.2);
+    }
+
+    .stat-card:nth-child(3) {
+      animation-delay: 0.15s;
+      border-color: rgba(255, 0, 229, 0.2);
+    }
+
+    .stat-card:nth-child(4) {
+      animation-delay: 0.2s;
+      border-color: rgba(255, 180, 0, 0.2);
+    }
+
+    @keyframes cardIn {
+      from {
+        opacity: 0;
+        transform: translateY(15px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .stat-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(200, 230, 255, 0.3);
+    }
+
+    .stat-value {
+      font-family: 'Orbitron', monospace;
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .stat-value.cyan {
+      color: var(--neon-cyan);
+      text-shadow: 0 0 20px rgba(0, 255, 247, 0.4);
+    }
+
+    .stat-value.green {
+      color: #00ff64;
+      text-shadow: 0 0 20px rgba(0, 255, 100, 0.4);
+    }
+
+    .stat-value.pink {
+      color: var(--neon-pink);
+      text-shadow: 0 0 20px rgba(255, 0, 229, 0.4);
+    }
+
+    .stat-value.amber {
+      color: #ffb400;
+      text-shadow: 0 0 20px rgba(255, 180, 0, 0.4);
+    }
+
+    /* Chart panels */
+    .chart-panel {
+      background: rgba(5, 15, 30, 0.8);
+      border: 1px solid rgba(0, 255, 247, 0.15);
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow: hidden;
+      animation: cardIn 0.5s ease 0.3s both;
+    }
+
+    .chart-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: rgba(0, 255, 247, 0.6);
+    }
+
+    .chart-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+    }
+
+    .chart-body::-webkit-scrollbar {
+      width: 3px;
+    }
+
+    .chart-body::-webkit-scrollbar-thumb {
+      background: rgba(0, 255, 247, 0.15);
+      border-radius: 2px;
+    }
+
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .bar-name {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: rgba(200, 230, 255, 0.6);
+      letter-spacing: 1px;
+      min-width: 100px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 6px;
+      background: rgba(0, 255, 247, 0.06);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 1s ease;
+    }
+
+    .bar-fill.cyan {
+      background: linear-gradient(90deg, rgba(0, 255, 247, 0.4), var(--neon-cyan));
+    }
+
+    .bar-fill.pink {
+      background: linear-gradient(90deg, rgba(255, 0, 229, 0.4), var(--neon-pink));
+    }
+
+    .bar-count {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: var(--neon-cyan);
+      min-width: 30px;
+      text-align: right;
+    }
+
+    .empty-msg {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: rgba(200, 230, 255, 0.2);
+      letter-spacing: 2px;
+      text-align: center;
+      margin: auto;
+    }
+  </style>
 </head>
+
 <body>
-<div class="grid-bg"></div>
-<div class="glow-orb cyan"></div>
-<div class="glow-orb pink"></div>
-<div class="scanlines"></div>
-<div class="corner tl"></div><div class="corner tr"></div>
-<div class="corner bl"></div><div class="corner br"></div>
+  <div class="grid-bg"></div>
+  <div class="glow-orb cyan"></div>
+  <div class="glow-orb pink"></div>
+  <div class="scanlines"></div>
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
 
-<div class="page">
-  <div class="top-bar">
-    <a href="/" class="back-btn">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-      Back
-    </a>
-    <div class="page-title">Analytics Dashboard</div>
-    <div class="live-badge"><div class="live-dot"></div>LIVE DATA</div>
-  </div>
-
-  <div class="dash-grid">
-    <!-- Stat Cards -->
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-label">Total Records</div>
-        <div class="stat-value cyan">{{ dept_data | sum(attribute=1) }}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Departments</div>
-        <div class="stat-value green">{{ dept_data | length }}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Subjects</div>
-        <div class="stat-value pink">{{ subject_data | length }}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Status</div>
-        <div class="stat-value amber" style="font-size:18px;">ACTIVE</div>
+  <div class="page">
+    <div class="top-bar">
+      <a href="/" class="back-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+        Back
+      </a>
+      <div class="page-title">Analytics Dashboard</div>
+      <div class="live-badge">
+        <div class="live-dot"></div>LIVE DATA
       </div>
     </div>
 
-    <!-- Department Chart -->
-    <div class="chart-panel">
-      <div class="chart-title">Department Attendance</div>
-      <div class="chart-body">
-        {% if dept_data %}
+    <div class="dash-grid">
+      <!-- Stat Cards -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Total Records</div>
+          <div class="stat-value cyan">{{ dept_data | sum(attribute=1) }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Departments</div>
+          <div class="stat-value green">{{ dept_data | length }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Subjects</div>
+          <div class="stat-value pink">{{ subject_data | length }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Status</div>
+          <div class="stat-value amber" style="font-size:18px;">ACTIVE</div>
+        </div>
+      </div>
+
+      <!-- Department Chart -->
+      <div class="chart-panel">
+        <div class="chart-title">Department Attendance</div>
+        <div class="chart-body">
+          {% if dept_data %}
           {% set max_dept = dept_data | max(attribute=1) %}
           {% for dept, count in dept_data %}
           <div class="bar-row">
@@ -135,17 +460,17 @@ body{background:var(--dark);font-family:'Rajdhani',sans-serif;color:var(--text);
             <div class="bar-count">{{ count }}</div>
           </div>
           {% endfor %}
-        {% else %}
+          {% else %}
           <div class="empty-msg">NO DATA YET</div>
-        {% endif %}
+          {% endif %}
+        </div>
       </div>
-    </div>
 
-    <!-- Subject Chart -->
-    <div class="chart-panel">
-      <div class="chart-title">Subject Attendance</div>
-      <div class="chart-body">
-        {% if subject_data %}
+      <!-- Subject Chart -->
+      <div class="chart-panel">
+        <div class="chart-title">Subject Attendance</div>
+        <div class="chart-body">
+          {% if subject_data %}
           {% set max_sub = subject_data | max(attribute=1) %}
           {% for subject, count in subject_data %}
           <div class="bar-row">
@@ -156,12 +481,13 @@ body{background:var(--dark);font-family:'Rajdhani',sans-serif;color:var(--text);
             <div class="bar-count">{{ count }}</div>
           </div>
           {% endfor %}
-        {% else %}
+          {% else %}
           <div class="empty-msg">NO DATA YET</div>
-        {% endif %}
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
-</div>
 </body>
+
 </html>

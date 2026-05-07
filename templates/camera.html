@@ -211,7 +211,7 @@
       width: min(1000px, 95vw);
     }
 
-    /* Camera */
+    /* Camera panel */
     .camera-panel {
       flex: 1;
       background: rgba(5, 15, 30, 0.8);
@@ -325,7 +325,8 @@
       gap: 6px;
     }
 
-    /* Liveness overlay */
+    /* ── STEP OVERLAYS ── */
+    /* Step 1: Blink overlay */
     .liveness-overlay {
       position: absolute;
       inset: 0;
@@ -334,9 +335,9 @@
       align-items: center;
       justify-content: center;
       gap: 12px;
-      background: rgba(2, 8, 16, 0.6);
+      background: rgba(2, 8, 16, 0.7);
       backdrop-filter: blur(2px);
-      transition: opacity 0.5s;
+      transition: opacity 0.4s;
       z-index: 3;
     }
 
@@ -394,33 +395,119 @@
       transition: width 0.08s, background 0.15s;
     }
 
-    /* Scanning pulse ring */
-    .scan-pulse {
+    /* Step 2: Gesture overlay */
+    .gesture-overlay {
       position: absolute;
       inset: 0;
-      border: 3px solid var(--neon-green);
-      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: rgba(2, 8, 16, 0.7);
+      backdrop-filter: blur(2px);
+      transition: opacity 0.4s;
+      z-index: 3;
       opacity: 0;
       pointer-events: none;
     }
 
-    .scan-pulse.active {
-      animation: pulsRing 1s ease-out infinite;
+    .gesture-overlay.show {
+      opacity: 1;
+      pointer-events: all;
     }
 
-    @keyframes pulsRing {
-      0% {
-        opacity: 0.6;
+    .challenge-number {
+      font-family: 'Orbitron', monospace;
+      font-size: 72px;
+      font-weight: 900;
+      color: var(--neon-amber);
+      text-shadow: 0 0 30px rgba(255, 179, 0, 0.6);
+      animation: numPulse 0.8s ease-in-out infinite;
+    }
+
+    @keyframes numPulse {
+
+      0%,
+      100% {
         transform: scale(1);
       }
 
-      100% {
-        opacity: 0;
-        transform: scale(1.02);
+      50% {
+        transform: scale(1.08);
       }
     }
 
-    /* Name overlay on camera */
+    .gesture-text {
+      font-family: 'Orbitron', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      color: var(--neon-amber);
+      text-align: center;
+    }
+
+    .gesture-sub {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: rgba(200, 230, 255, 0.4);
+      letter-spacing: 2px;
+    }
+
+    .finger-bar-wrap {
+      width: 200px;
+      height: 6px;
+      background: rgba(255, 179, 0, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .finger-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--neon-amber);
+      border-radius: 4px;
+      transition: width 0.2s, background 0.2s;
+    }
+
+    .finger-count-display {
+      font-family: 'Orbitron', monospace;
+      font-size: 28px;
+      font-weight: 700;
+      color: rgba(200, 230, 255, 0.5);
+      letter-spacing: 4px;
+    }
+
+    .finger-count-display.match {
+      color: var(--neon-green);
+      text-shadow: 0 0 20px rgba(0, 255, 100, 0.5);
+    }
+
+    /* Confirmed badge */
+    .confirmed-badge {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 255, 100, 0.1);
+      border: 1px solid rgba(0, 255, 100, 0.4);
+      border-radius: 20px;
+      padding: 4px 16px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: var(--neon-green);
+      letter-spacing: 2px;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      z-index: 4;
+    }
+
+    .confirmed-badge.show {
+      display: flex;
+    }
+
+    /* Name overlay */
     .name-overlay {
       position: absolute;
       top: 12px;
@@ -455,6 +542,32 @@
       }
     }
 
+    /* Scan pulse */
+    .scan-pulse {
+      position: absolute;
+      inset: 0;
+      border: 3px solid var(--neon-green);
+      border-radius: 16px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .scan-pulse.active {
+      animation: pulsRing 1s ease-out infinite;
+    }
+
+    @keyframes pulsRing {
+      0% {
+        opacity: 0.6;
+        transform: scale(1);
+      }
+
+      100% {
+        opacity: 0;
+        transform: scale(1.02);
+      }
+    }
+
     .flash {
       position: absolute;
       inset: 0;
@@ -468,7 +581,7 @@
       opacity: 0.3;
     }
 
-    /* Right panel */
+    /* Controls panel */
     .controls-panel {
       width: 300px;
       display: flex;
@@ -533,7 +646,85 @@
       color: rgba(200, 230, 255, 0.2);
     }
 
-    /* Stats row */
+    /* Verification steps card */
+    .steps-card {
+      background: rgba(5, 15, 30, 0.85);
+      border: 1px solid rgba(0, 255, 247, 0.15);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .steps-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: rgba(0, 255, 247, 0.5);
+      margin-bottom: 4px;
+    }
+
+    .step-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .step-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 255, 247, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      flex-shrink: 0;
+      transition: all 0.3s;
+    }
+
+    .step-icon.done {
+      border-color: var(--neon-green);
+      background: rgba(0, 255, 100, 0.1);
+    }
+
+    .step-icon.active {
+      border-color: var(--neon-amber);
+      background: rgba(255, 179, 0, 0.1);
+      animation: stepPulse 0.8s ease-in-out infinite;
+    }
+
+    @keyframes stepPulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(255, 179, 0, 0.3);
+      }
+
+      50% {
+        box-shadow: 0 0 0 6px rgba(255, 179, 0, 0);
+      }
+    }
+
+    .step-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 1px;
+      color: rgba(200, 230, 255, 0.4);
+      transition: color 0.3s;
+    }
+
+    .step-label.done {
+      color: var(--neon-green);
+    }
+
+    .step-label.active {
+      color: var(--neon-amber);
+    }
+
+    /* Stats */
     .stats-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -618,12 +809,11 @@
       text-transform: uppercase;
       color: #ff4455;
       cursor: pointer;
-      display: flex;
+      display: none;
       align-items: center;
       justify-content: center;
       gap: 10px;
       transition: all 0.3s;
-      display: none;
     }
 
     .stop-btn:hover {
@@ -677,7 +867,7 @@
       flex-direction: column;
       gap: 6px;
       overflow-y: auto;
-      max-height: 180px;
+      max-height: 160px;
     }
 
     .marked-list::-webkit-scrollbar {
@@ -824,20 +1014,36 @@
       <div class="camera-panel">
         <video id="videoFeed" class="camera-feed" autoplay playsinline muted></video>
 
-        <!-- Liveness overlay -->
+        <!-- Step 1: Blink overlay -->
         <div class="liveness-overlay" id="livenessOverlay">
           <div class="liveness-icon">👁️</div>
-          <div class="liveness-text">Blink to Verify</div>
-          <div class="liveness-sub">One-time anti-spoofing check</div>
+          <div class="liveness-text">Step 1: Blink to Verify</div>
+          <div class="liveness-sub">Anti-spoofing liveness check</div>
           <div class="ear-bar-wrap">
             <div class="ear-bar" id="earBar"></div>
           </div>
         </div>
 
+        <!-- Step 2: Gesture overlay -->
+        <div class="gesture-overlay" id="gestureOverlay">
+          <div class="challenge-number" id="challengeNum">3</div>
+          <div class="gesture-text">Step 2: Show Fingers</div>
+          <div class="gesture-sub">Hold up this many fingers</div>
+          <div class="finger-count-display" id="fingerDisplay">0</div>
+          <div class="finger-bar-wrap">
+            <div class="finger-bar" id="fingerBar"></div>
+          </div>
+        </div>
+
+        <!-- Confirmed badge -->
+        <div class="confirmed-badge" id="confirmedBadge">
+          <div class="live-dot"></div>VERIFIED — SCANNING
+        </div>
+
         <!-- Name overlay -->
         <div class="name-overlay" id="nameOverlay"></div>
 
-        <!-- Scan pulse ring -->
+        <!-- Scan pulse -->
         <div class="scan-pulse" id="scanPulse"></div>
 
         <div class="flash" id="flash"></div>
@@ -856,7 +1062,6 @@
       <!-- Controls -->
       <div class="controls-panel">
 
-        <!-- Session details -->
         <div class="form-card">
           <div class="form-card-title">Session Details</div>
           <div class="field">
@@ -866,6 +1071,23 @@
           <div class="field">
             <label>Department</label>
             <input type="text" id="deptInput" placeholder="e.g. CSE" value="{{ department }}" />
+          </div>
+        </div>
+
+        <!-- Verification steps -->
+        <div class="steps-card">
+          <div class="steps-title">Verification</div>
+          <div class="step-row">
+            <div class="step-icon" id="step1Icon">👁️</div>
+            <div class="step-label" id="step1Label">Blink detection</div>
+          </div>
+          <div class="step-row">
+            <div class="step-icon" id="step2Icon">🖐️</div>
+            <div class="step-label" id="step2Label">Finger count challenge</div>
+          </div>
+          <div class="step-row">
+            <div class="step-icon" id="step3Icon">🎯</div>
+            <div class="step-label" id="step3Label">Face recognition</div>
           </div>
         </div>
 
@@ -881,7 +1103,7 @@
           </div>
         </div>
 
-        <!-- Start/Stop buttons -->
+        <!-- Buttons -->
         <button class="start-btn" id="startBtn" onclick="startScanning()" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="5 3 19 12 5 21 5 3" />
@@ -913,10 +1135,13 @@
   <canvas id="captureCanvas"></canvas>
   <div class="toast" id="toast"></div>
 
+  <!-- MediaPipe: Face Mesh + Hands + Camera Utils -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
   <script>
+    // ── Elements ──────────────────────────────────────────────────
     const video = document.getElementById('videoFeed');
     const canvas = document.getElementById('captureCanvas');
     const camStatusText = document.getElementById('camStatusText');
@@ -924,7 +1149,8 @@
     const flash = document.getElementById('flash');
     const scanLine = document.getElementById('scanLine');
     const livenessOverlay = document.getElementById('livenessOverlay');
-    const earBar = document.getElementById('earBar');
+    const gestureOverlay = document.getElementById('gestureOverlay');
+    const confirmedBadge = document.getElementById('confirmedBadge');
     const nameOverlay = document.getElementById('nameOverlay');
     const scanPulse = document.getElementById('scanPulse');
     const startBtn = document.getElementById('startBtn');
@@ -933,50 +1159,155 @@
     const markedCount = document.getElementById('markedCount');
     const markedCountHdr = document.getElementById('markedCountHeader');
     const scanCount = document.getElementById('scanCount');
+    const earBar = document.getElementById('earBar');
+    const challengeNum = document.getElementById('challengeNum');
+    const fingerDisplay = document.getElementById('fingerDisplay');
+    const fingerBar = document.getElementById('fingerBar');
 
-    // MediaPipe
+    // ── State ─────────────────────────────────────────────────────
     const LEFT_EYE = [362, 385, 387, 263, 373, 380];
     const RIGHT_EYE = [33, 160, 158, 133, 153, 144];
     const EAR_THRESHOLD = 0.20;
     const CONSEC_FRAMES = 2;
-    const SCAN_INTERVAL = 3000; // scan every 3 seconds
+    const SCAN_INTERVAL = 3000;
+    const FINGER_HOLD_FRAMES = 8; // frames finger count must match
 
-    let livenessVerified = false;
+    let blinkVerified = false;
+    let gestureVerified = false;
     let eyeClosedFrames = 0;
+    let challengeNumber = 0;
+    let fingerMatchFrames = 0;
     let scanning = false;
     let scanTimer = null;
     let totalMarked = 0;
     let totalScans = 0;
 
+    // ── EAR helpers ───────────────────────────────────────────────
     function dist(p1, p2) { return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2); }
     function calcEAR(lm, idx) {
       const [p1, p2, p3, p4, p5, p6] = idx.map(i => lm[i]);
       return (dist(p2, p6) + dist(p3, p5)) / (2.0 * dist(p1, p4));
     }
 
+    // ── Finger count ──────────────────────────────────────────────
+    function countFingers(landmarks) {
+      let count = 0;
+      // Index, Middle, Ring, Pinky: tip y < pip y = extended
+      if (landmarks[8].y < landmarks[6].y) count++; // index
+      if (landmarks[12].y < landmarks[10].y) count++; // middle
+      if (landmarks[16].y < landmarks[14].y) count++; // ring
+      if (landmarks[20].y < landmarks[18].y) count++; // pinky
+      // Thumb: tip x > ip x (mirrored video)
+      if (landmarks[4].x > landmarks[3].x) count++; // thumb
+      return count;
+    }
+
+    // ── MediaPipe Face Mesh (blink detection) ─────────────────────
     const faceMesh = new FaceMesh({
       locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
     });
     faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
     faceMesh.onResults(results => {
-      if (livenessVerified) return;
+      if (blinkVerified) return;
       if (!results.multiFaceLandmarks?.length) { earBar.style.width = '0%'; return; }
       const lm = results.multiFaceLandmarks[0];
       const avgEAR = (calcEAR(lm, LEFT_EYE) + calcEAR(lm, RIGHT_EYE)) / 2;
       earBar.style.width = Math.min(100, (avgEAR / 0.35) * 100) + '%';
       earBar.style.background = avgEAR < EAR_THRESHOLD ? '#ff4455' : 'var(--neon-cyan)';
       if (avgEAR < EAR_THRESHOLD) { eyeClosedFrames++; }
-      else { if (eyeClosedFrames >= CONSEC_FRAMES) confirmLiveness(); eyeClosedFrames = 0; }
+      else { if (eyeClosedFrames >= CONSEC_FRAMES) confirmBlink(); eyeClosedFrames = 0; }
     });
 
-    function confirmLiveness() {
-      livenessVerified = true;
+    // ── MediaPipe Hands (finger count) ───────────────────────────
+    const hands = new Hands({
+      locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+    });
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.5 });
+    hands.onResults(results => {
+      if (!blinkVerified || gestureVerified) return;
+      if (!results.multiHandLandmarks?.length) {
+        fingerDisplay.textContent = '0';
+        fingerDisplay.classList.remove('match');
+        fingerBar.style.width = '0%';
+        fingerBar.style.background = 'var(--neon-amber)';
+        fingerMatchFrames = 0;
+        return;
+      }
+      const lm = results.multiHandLandmarks[0];
+      const count = countFingers(lm);
+      fingerDisplay.textContent = count;
+      const barPct = (count / 5) * 100;
+      fingerBar.style.width = barPct + '%';
+
+      if (count === challengeNumber) {
+        fingerDisplay.classList.add('match');
+        fingerBar.style.background = 'var(--neon-green)';
+        fingerMatchFrames++;
+        if (fingerMatchFrames >= FINGER_HOLD_FRAMES) confirmGesture();
+      } else {
+        fingerDisplay.classList.remove('match');
+        fingerBar.style.background = 'var(--neon-amber)';
+        fingerMatchFrames = 0;
+      }
+    });
+
+    // ── Step confirmations ────────────────────────────────────────
+    function confirmBlink() {
+      blinkVerified = true;
       livenessOverlay.classList.add('hidden');
-      startBtn.disabled = false;
-      camStatusText.textContent = 'READY';
-      showToast('✅ Liveness verified! Press Start Scanning.', false);
+
+      // Generate random challenge
+      challengeNumber = Math.floor(Math.random() * 5) + 1;
+      challengeNum.textContent = challengeNumber;
+
+      // Show gesture overlay
+      gestureOverlay.classList.add('show');
+      camStatusText.textContent = 'SHOW FINGERS';
+
+      // Update step indicators
+      setStep(1, 'done');
+      setStep(2, 'active');
+
+      showToast('✅ Blink verified! Now show ' + challengeNumber + ' finger(s).', false);
     }
 
+    function confirmGesture() {
+      gestureVerified = true;
+      gestureOverlay.classList.remove('show');
+      confirmedBadge.classList.add('show');
+
+      // Update step indicators
+      setStep(2, 'done');
+      setStep(3, 'active');
+
+      startBtn.disabled = false;
+      camStatusText.textContent = 'READY';
+      showToast('✅ Gesture verified! Press Start Scanning.', false);
+    }
+
+    function resetVerification() {
+      blinkVerified = false;
+      gestureVerified = false;
+      eyeClosedFrames = 0;
+      fingerMatchFrames = 0;
+      livenessOverlay.classList.remove('hidden');
+      gestureOverlay.classList.remove('show');
+      confirmedBadge.classList.remove('show');
+      setStep(1, 'active');
+      setStep(2, '');
+      setStep(3, '');
+      startBtn.disabled = true;
+      camStatusText.textContent = 'BLINK NOW';
+    }
+
+    function setStep(n, state) {
+      const icon = document.getElementById('step' + n + 'Icon');
+      const label = document.getElementById('step' + n + 'Label');
+      icon.className = 'step-icon' + (state ? ' ' + state : '');
+      label.className = 'step-label' + (state ? ' ' + state : '');
+    }
+
+    // ── Camera init + MediaPipe loop ──────────────────────────────
     async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -987,9 +1318,17 @@
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
           camStatusText.textContent = 'BLINK NOW';
+          setStep(1, 'active');
         };
+
         const mpCam = new Camera(video, {
-          onFrame: async () => { if (!livenessVerified) await faceMesh.send({ image: video }); },
+          onFrame: async () => {
+            if (!blinkVerified) {
+              await faceMesh.send({ image: video });
+            } else if (!gestureVerified) {
+              await hands.send({ image: video });
+            }
+          },
           width: 1280, height: 720
         });
         mpCam.start();
@@ -999,6 +1338,7 @@
       }
     }
 
+    // ── Scanning ──────────────────────────────────────────────────
     function startScanning() {
       const subject = document.getElementById('subjectInput').value.trim() || 'General';
       const dept = document.getElementById('deptInput').value.trim() || 'General';
@@ -1010,9 +1350,8 @@
       scanLine.classList.add('active');
       scanPulse.classList.add('active');
       camStatusText.textContent = 'SCANNING';
+      setStep(3, 'active');
       showToast('🔍 Auto-scanning started. Students step in!', false);
-
-      // Scan immediately then every SCAN_INTERVAL
       autoScan();
       scanTimer = setInterval(autoScan, SCAN_INTERVAL);
     }
@@ -1034,13 +1373,11 @@
       const subject = document.getElementById('subjectInput').value.trim() || 'General';
       const dept = document.getElementById('deptInput').value.trim() || 'General';
 
-      // Capture frame
       const ctx = canvas.getContext('2d');
       ctx.save(); ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height); ctx.restore();
       const imageData = canvas.toDataURL('image/jpeg', 0.85);
 
-      // Flash
       flash.classList.add('active');
       setTimeout(() => flash.classList.remove('active'), 100);
 
@@ -1056,7 +1393,6 @@
         const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
         if (result.success) {
-          // Extract name from message "✅ Marked: Name"
           const name = result.message.replace('✅ Marked: ', '');
           addToLog(name, time, 'marked');
           showNameOverlay('✅ ' + name);
@@ -1068,27 +1404,23 @@
           addToLog(name, time, 'skipped');
           showNameOverlay('⚠️ ' + name);
         } else if (result.message.includes('No face')) {
-          // No face — silent, don't spam log
+          // silent
         } else {
           addToLog('Unknown', time, 'unknown');
         }
-      } catch (err) {
-        console.error('Scan error:', err);
-      }
+      } catch (err) { console.error('Scan error:', err); }
     }
 
+    // ── UI helpers ────────────────────────────────────────────────
     function addToLog(name, time, type) {
-      // Remove empty state
       const empty = markedList.querySelector('.empty-list');
       if (empty) empty.remove();
-
       const item = document.createElement('div');
       item.className = 'marked-item' + (type === 'skipped' ? ' skipped' : type === 'unknown' ? ' unknown' : '');
       item.innerHTML = `
       <div class="marked-dot${type === 'skipped' ? ' skipped' : type === 'unknown' ? ' unknown' : ''}"></div>
       <div class="marked-name">${name}</div>
-      <div class="marked-time">${time}</div>
-    `;
+      <div class="marked-time">${time}</div>`;
       markedList.prepend(item);
     }
 
