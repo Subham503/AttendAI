@@ -1,0 +1,8 @@
+flask>=3.0.0
+opencv-contrib-python>=4.8.0
+bcrypt>=4.0.0
+numpy>=1.24.0
+python-dotenv>=1.0.0
+supabase>=2.0.0
+mediapipe>=0.10.0
+Pillow>=10.0.0
