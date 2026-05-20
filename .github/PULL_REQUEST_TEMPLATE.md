@@ -2,8 +2,7 @@
 Brief description of what this PR does.
 
 ## Related Issue
-Closes #<!-- issue number -->
-
+Closes #<issue-number>
 ## Type of Change
 - [ ] Bug fix
 - [ ] New feature
