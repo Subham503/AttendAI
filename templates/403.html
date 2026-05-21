@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>403 — Access Denied | AttendAI</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap"
+    rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --neon-cyan: #00fff7;
+      --neon-pink: #ff00e5;
+      --dark: #020810;
+      --dark2: #050f1e;
+      --text: #c8e6ff;
+    }
+    body {
+      background: var(--dark);
+      color: var(--text);
+      font-family: 'Rajdhani', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+    .container {
+      padding: 3rem 2rem;
+      border: 1px solid var(--neon-pink);
+      border-radius: 12px;
+      background: var(--dark2);
+      max-width: 480px;
+      width: 90%;
+    }
+    h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 5rem;
+      color: var(--neon-pink);
+      text-shadow: 0 0 20px var(--neon-pink);
+      line-height: 1;
+    }
+    h2 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.2rem;
+      color: var(--neon-cyan);
+      margin: 1rem 0 0.5rem;
+      letter-spacing: 2px;
+    }
+    p {
+      font-size: 1rem;
+      color: var(--text);
+      opacity: 0.75;
+      margin-bottom: 2rem;
+    }
+    a {
+      display: inline-block;
+      padding: 0.6rem 1.6rem;
+      border: 1px solid var(--neon-cyan);
+      border-radius: 6px;
+      color: var(--neon-cyan);
+      text-decoration: none;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.8rem;
+      letter-spacing: 1px;
+      transition: background 0.2s;
+    }
+    a:hover { background: rgba(0, 255, 247, 0.1); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>403</h1>
+    <h2>Access Denied</h2>
+    <p>You do not have permission to view this page. This area is restricted to faculty and admin users only.</p>
+    <a href="/">Go Home</a>
+  </div>
+</body>
+</html>

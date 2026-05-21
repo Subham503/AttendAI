@@ -227,6 +227,8 @@ def student_dashboard():
 def class_session():
     if not session.get('logged_in'):
         return redirect('/login')
+    if session.get('role') not in ['admin', 'faculty']:
+        return render_template('403.html'), 403
     if request.method == 'POST':
         subject    = request.form.get('subject', 'general').strip().lower()
         department = request.form.get('department', 'general').strip().lower()
@@ -305,6 +307,8 @@ def camera():
     global current_subject, current_department
     if not session.get('logged_in'):
         return redirect('/login')
+    if session.get('role') not in ['admin', 'faculty']:
+        return render_template('403.html'), 403
     current_subject    = request.args.get('subject', 'general').strip().lower()
     current_department = request.args.get('department', 'general').strip().lower()
     return render_template("camera.html",
@@ -317,6 +321,8 @@ def mark_attendance():
     global current_subject, current_department
     if not session.get('logged_in'):
         return jsonify({'success': False, 'message': 'Not logged in'}), 401
+    if session.get('role') not in ['admin', 'faculty']:
+        return jsonify({'success': False, 'message': 'Access denied: faculty or admin only'}), 403
 
     data       = request.get_json()
     image_data = data.get('image', '')
@@ -388,7 +394,9 @@ def mark_attendance():
 def attendance():
     if not session.get('logged_in'):
         return redirect('/login')
-    
+    if session.get('role') not in ['admin', 'faculty']:
+        return render_template('403.html'), 403
+
     result = supabase_client.table('attendance').select('*').execute()
     data = []
     for r in (result.data or []):
@@ -404,6 +412,8 @@ def attendance():
 def export_csv():
     if not session.get('logged_in'):
         return redirect('/login')
+    if session.get('role') not in ['admin', 'faculty']:
+        return render_template('403.html'), 403
     import csv, io
     result = supabase_client.table('attendance').select('*').execute()
     output = io.StringIO()
@@ -423,7 +433,9 @@ def export_csv():
 def dashboard():
     if not session.get('logged_in'):
         return redirect('/login')
-    
+    if session.get('role') not in ['admin', 'faculty']:
+        return render_template('403.html'), 403
+
     result = supabase_client.table('attendance').select('department, subject').execute()
     dept_counts = {}
     subj_counts = {}
@@ -445,7 +457,9 @@ def dashboard():
 def delete(id):
     if not session.get('logged_in'):
         return redirect('/login')
-    
+    if session.get('role') not in ['admin', 'faculty']:
+        return render_template('403.html'), 403
+
     supabase_client.table('attendance').delete().eq('id', id).execute()
     return redirect('/attendance')
 
