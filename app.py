@@ -3,10 +3,16 @@ import cv2
 from datetime import datetime
 from supabase import create_client
 import os
+import re
 import numpy as np
 import bcrypt
 import pickle
+from pathlib import Path
 from dotenv import load_dotenv
+
+# Reg-no must be purely alphanumeric with optional hyphens/underscores,
+# 2-30 characters. Rejects any path traversal sequence (dots, slashes, etc.).
+_REG_NO_RE = re.compile(r'^[A-Z0-9][A-Z0-9_-]{1,29}$')
 
 # Load environment variables
 load_dotenv()
@@ -251,13 +257,23 @@ def register():
     if not all([name, reg_no, department, class_name, password]):
         return jsonify({'success': False, 'message': 'Missing required fields.'})
 
+    # Layer 1: validate reg_no format — only uppercase letters, digits,
+    # hyphens, and underscores are allowed (2-30 chars). This rejects any
+    # path traversal sequence such as "../", "//", or null bytes before the
+    # value ever reaches the filesystem.
+    if not _REG_NO_RE.match(reg_no):
+        return jsonify({
+            'success': False,
+            'message': 'Invalid registration number. Use only letters, digits, hyphens, and underscores (2-30 characters).'
+        })
+
     if len(frames) < 20:
         return jsonify({'success': False, 'message': f'Need 20 frames, got {len(frames)}.'})
 
     hashed_pwd = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
 
-    if not os.path.exists("images"):
-        os.makedirs("images")
+    images_dir = Path("images").resolve()
+    images_dir.mkdir(parents=True, exist_ok=True)  # replaces the old os.makedirs call
 
     face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
     saved = 0
@@ -274,8 +290,15 @@ def register():
             detected = face_cascade.detectMultiScale(gray, 1.3, 5)
             if len(detected) == 0:
                 continue
-            photo_path = f"images/{reg_no}_{saved + 1}.jpg"
-            cv2.imwrite(photo_path, frame)
+
+            # Layer 2: path confinement — resolve the absolute path and
+            # confirm it stays inside images_dir before writing anything.
+            photo_path = (images_dir / f"{reg_no}_{saved + 1}.jpg").resolve()
+            if not photo_path.is_relative_to(images_dir):
+                print(f"Path traversal attempt blocked for reg_no={reg_no!r}")
+                continue
+
+            cv2.imwrite(str(photo_path), frame)
             saved += 1
         except Exception as e:
             print(f"Frame {i} error: {e}")
