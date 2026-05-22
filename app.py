@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, Response, jsonify, session
+from email_alerts import check_and_alert
 import cv2
 from datetime import datetime
 from supabase import create_client
