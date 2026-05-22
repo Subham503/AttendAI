@@ -1,8 +1,10 @@
-from flask import Flask, render_template, request, redirect, Response, jsonify, session, make_response
+from flask import Flask, render_template, request, redirect, Response, jsonify, session, make_response, send_file
 import cv2
 from datetime import datetime, timedelta
 from supabase import create_client
 import os
+import io
+import atexit
 import numpy as np
 import bcrypt
 import pickle
@@ -413,9 +415,6 @@ def weekly_report_job():
         end_date = datetime.now().date()
         start_date = end_date - timedelta(days=7)
         
-        if not os.path.exists("reports"):
-            os.makedirs("reports")
-            
         for subj in subjects:
             pdf_bytes = generate_attendance_pdf(
                 supabase_client, 
@@ -423,22 +422,27 @@ def weekly_report_job():
                 start_date=str(start_date), 
                 end_date=str(end_date)
             )
-            filename = f"reports/Weekly_{subj}_{start_date}_to_{end_date}.pdf"
-            with open(filename, 'wb') as f:
-                f.write(pdf_bytes)
-        print("Weekly reports generated successfully.")
+            # TODO: Upload pdf_bytes to Supabase Storage or email to faculty
+            # to avoid local disk bloat as requested in PR review.
+            pass
+        print("Weekly reports generated (stateless mode).")
     except Exception as e:
         print(f"Error in weekly report job: {e}")
 
 # Run every Friday at 17:00 (5 PM)
 scheduler.add_job(func=weekly_report_job, trigger="cron", day_of_week='fri', hour=17, minute=0)
 scheduler.start()
+atexit.register(lambda: scheduler.shutdown(wait=False))
 
 # ================= EXPORT PDF =================
 @app.route('/export_pdf')
 def export_pdf():
     if not session.get('logged_in'):
         return redirect('/login')
+        
+    # Auth check: Only admin and faculty can export PDFs
+    if session.get('role') not in ['admin', 'faculty']:
+        return "Access Denied: Faculty/Admin only", 403
         
     start_date = request.args.get('start_date', '').strip()
     end_date = request.args.get('end_date', '').strip()
@@ -450,11 +454,14 @@ def export_pdf():
     
     try:
         pdf_bytes = generate_attendance_pdf(supabase_client, subject, start_date, end_date)
-        response = make_response(pdf_bytes)
-        filename = f"attendance_report_{subject or 'all'}.pdf"
-        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
-        response.headers['Content-Type'] = 'application/pdf'
-        return response
+        buffer = io.BytesIO(pdf_bytes)
+        buffer.seek(0)
+        return send_file(
+            buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f"attendance_report_{subject or 'all'}.pdf"
+        )
     except Exception as e:
         return f"Error generating PDF: {str(e)}"
 
