@@ -90,9 +90,9 @@ git checkout -b feat/feature-name
 
 | Label | Points | Description |
 |-------|--------|-------------|
-| `level-1` | 10 pts | Small fixes — UI, typos, README updates |
-| `level-2` | 25 pts | Medium features — new routes, UI components |
-| `level-3` | 40 pts | Complex features — new modules, integrations |
+| `level-1` | 3 pts | Small fixes — UI, typos, README updates |
+| `level-2` | 5 pts | Medium features — new routes, UI components |
+| `level-3` | 10 pts | Complex features — new modules, integrations |
 | `bug` | — | Something is broken |
 | `enhancement` | — | New feature request |
 | `good first issue` | — | Great for beginners |
