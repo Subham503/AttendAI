@@ -9,16 +9,51 @@ import bcrypt
 import pickle
 from pathlib import Path
 from dotenv import load_dotenv
+import bleach
 
 # Reg-no must be purely alphanumeric with optional hyphens/underscores,
 # 2-30 characters. Rejects any path traversal sequence (dots, slashes, etc.).
 _REG_NO_RE = re.compile(r'^[A-Z0-9][A-Z0-9_-]{1,29}$')
+
+
+def _sanitize(value: str, max_length: int = 100) -> str:
+    """Strip all HTML tags and attributes from a user-supplied string.
+
+    Uses bleach.clean() with an empty allowed-tags list so that any
+    HTML/JS payload (e.g. <script>alert(1)</script>) is reduced to
+    harmless plain text before it is persisted to the database.
+    This provides defence-in-depth on top of Jinja2's auto-escaping.
+    """
+    cleaned = bleach.clean(value, tags=[], attributes={}, strip=True)
+    return cleaned[:max_length]
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "smartattend_secret_2024")
+
+
+@app.after_request
+def set_security_headers(response):
+    """Add security headers to every response.
+
+    Content-Security-Policy acts as a third layer of XSS defence: even if
+    sanitization or Jinja2 auto-escaping were somehow bypassed, the browser
+    refuses to execute scripts not originating from the same host.
+    """
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "   # keep 'unsafe-inline' for existing inline JS
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self';"
+    )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 supabase_client = create_client(
     os.getenv("SUPABASE_URL"),
@@ -249,10 +284,12 @@ def register():
 
     import base64
     data = request.get_json(force=True, silent=True) or {}
-    name       = data.get('name', '').strip()
-    reg_no     = data.get('reg_no', '').strip().upper()
-    department = data.get('department', '').strip().upper()
-    class_name = data.get('class_name', '').strip()
+    # Sanitize all free-text fields to strip HTML/JS before DB storage.
+    # bleach.clean() with tags=[] reduces any payload to plain text.
+    name       = _sanitize(data.get('name', '').strip())
+    reg_no     = data.get('reg_no', '').strip().upper()   # validated by regex below
+    department = _sanitize(data.get('department', '').strip().upper())
+    class_name = _sanitize(data.get('class_name', '').strip())
     password   = data.get('password', '').strip()
     frames     = data.get('frames', [])
 
