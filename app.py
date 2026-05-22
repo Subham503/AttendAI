@@ -1,12 +1,14 @@
-from flask import Flask, render_template, request, redirect, Response, jsonify, session
+from flask import Flask, render_template, request, redirect, Response, jsonify, session, make_response
 import cv2
-from datetime import datetime
+from datetime import datetime, timedelta
 from supabase import create_client
 import os
 import numpy as np
 import bcrypt
 import pickle
 from dotenv import load_dotenv
+from apscheduler.schedulers.background import BackgroundScheduler
+from report_engine import generate_attendance_pdf
 
 # Load environment variables
 load_dotenv()
@@ -398,6 +400,63 @@ def attendance():
         ))
         
     return render_template("attendance.html", data=data)
+
+# ================= SCHEDULER SETUP =================
+scheduler = BackgroundScheduler()
+
+def weekly_report_job():
+    print("Running weekly PDF report generation...")
+    try:
+        res = supabase_client.table('attendance').select('subject').execute()
+        subjects = set(r['subject'] for r in (res.data or []) if r.get('subject'))
+        
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=7)
+        
+        if not os.path.exists("reports"):
+            os.makedirs("reports")
+            
+        for subj in subjects:
+            pdf_bytes = generate_attendance_pdf(
+                supabase_client, 
+                subject=subj, 
+                start_date=str(start_date), 
+                end_date=str(end_date)
+            )
+            filename = f"reports/Weekly_{subj}_{start_date}_to_{end_date}.pdf"
+            with open(filename, 'wb') as f:
+                f.write(pdf_bytes)
+        print("Weekly reports generated successfully.")
+    except Exception as e:
+        print(f"Error in weekly report job: {e}")
+
+# Run every Friday at 17:00 (5 PM)
+scheduler.add_job(func=weekly_report_job, trigger="cron", day_of_week='fri', hour=17, minute=0)
+scheduler.start()
+
+# ================= EXPORT PDF =================
+@app.route('/export_pdf')
+def export_pdf():
+    if not session.get('logged_in'):
+        return redirect('/login')
+        
+    start_date = request.args.get('start_date', '').strip()
+    end_date = request.args.get('end_date', '').strip()
+    subject = request.args.get('subject', '').strip().lower()
+    
+    if not start_date: start_date = None
+    if not end_date: end_date = None
+    if not subject: subject = None
+    
+    try:
+        pdf_bytes = generate_attendance_pdf(supabase_client, subject, start_date, end_date)
+        response = make_response(pdf_bytes)
+        filename = f"attendance_report_{subject or 'all'}.pdf"
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        response.headers['Content-Type'] = 'application/pdf'
+        return response
+    except Exception as e:
+        return f"Error generating PDF: {str(e)}"
 
 # ================= EXPORT CSV =================
 @app.route('/export_csv')
