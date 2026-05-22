@@ -6,3 +6,4 @@ python-dotenv>=1.0.0
 supabase>=2.0.0
 mediapipe>=0.10.0
 Pillow>=10.0.0
+bleach>=6.0.0
