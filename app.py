@@ -24,7 +24,6 @@ app.secret_key = os.getenv("SECRET_KEY", "smartattend_secret_2024")
 # Mail config from environment
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
-init_mail(app)
 
 if app.config['MAIL_USERNAME'] and app.config['MAIL_PASSWORD']:
     init_mail(app)
@@ -490,21 +489,26 @@ def dashboard():
 @app.route('/check-attendance-alerts', methods=['POST'])
 def check_attendance_alerts():
     """Endpoint to trigger attendance alert checks"""
-    if 'user' not in session or session.get('role') != 'admin':
+
+    if not session.get('logged_in') or session.get('role') != 'admin':
         return jsonify({'error': 'Unauthorized'}), 403
-    
+
     threshold = float(request.json.get('threshold', 75.0))
-    
-    students = supabase.table('students').select('*').execute()
-    
+
+    students = supabase_client.table('students').select('*').execute()
+
     total_alerts = 0
+
     for student in students.data:
         if student.get('email'):
             alerts = send_low_attendance_alert(
-                app, supabase, student, threshold
+                app,
+                supabase_client,
+                student,
+                threshold
             )
             total_alerts += len(alerts)
-    
+
     return jsonify({
         'message': f'Alert check complete. {total_alerts} alerts sent.',
         'alerts_sent': total_alerts
