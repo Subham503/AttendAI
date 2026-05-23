@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, Response, jsonify, session
 import cv2
+from alerts import init_mail, send_low_attendance_alert
 from datetime import datetime
 from supabase import create_client
 import os
@@ -19,6 +20,16 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "smartattend_secret_2024")
+
+# Mail config from environment
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+init_mail(app)
+
+if app.config['MAIL_USERNAME'] and app.config['MAIL_PASSWORD']:
+    init_mail(app)
+else:
+    print("Mail disabled - credentials not provided")
 
 supabase_client = create_client(
     os.getenv("SUPABASE_URL"),
@@ -474,6 +485,30 @@ def dashboard():
     return render_template("dashboard.html",
                            dept_data=dept_data,
                            subject_data=subject_data)
+
+# ================= ALERTS =================
+@app.route('/check-attendance-alerts', methods=['POST'])
+def check_attendance_alerts():
+    """Endpoint to trigger attendance alert checks"""
+    if 'user' not in session or session.get('role') != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    threshold = float(request.json.get('threshold', 75.0))
+    
+    students = supabase.table('students').select('*').execute()
+    
+    total_alerts = 0
+    for student in students.data:
+        if student.get('email'):
+            alerts = send_low_attendance_alert(
+                app, supabase, student, threshold
+            )
+            total_alerts += len(alerts)
+    
+    return jsonify({
+        'message': f'Alert check complete. {total_alerts} alerts sent.',
+        'alerts_sent': total_alerts
+    })
 
 # ================= DELETE =================
 @app.route('/delete/<int:id>')
