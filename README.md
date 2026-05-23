@@ -32,6 +32,7 @@ Built as part of the **NIST University AI-Enabled Smart Campus Project** under t
 - 🗂️ **Role-based access** — Admin, Faculty, Student with separate dashboards
 - ☁️ **Supabase cloud database** — no local DB setup, works from anywhere
 - 🌐 **Environment-based config** — no hardcoded credentials, uses `.env`
+- 📧 **Low attendance email alerts** — automatic email notifications for students below attendance threshold (requires SMTP credentials)
 
 ---
 
@@ -65,8 +66,25 @@ git clone https://github.com/Subham503/AttendAI.git
 cd AttendAI
 
 # Install dependencies
+pip install flask opencv-contrib-python bcrypt numpy python-dotenv 
 pip install flask opencv-contrib-python bcrypt numpy python-dotenv supabase
 ```
+
+---
+
+### Contributor Notes
+
+Contributors do not require production credentials.
+
+For local development:
+
+- Create your own `.env`
+- Use personal SMTP credentials for testing email alerts
+- If mail credentials are absent, email functionality remains disabled
+
+Production credentials are intentionally not committed to the repository.
+
+---
 
 ### Environment Variables
 
@@ -76,6 +94,18 @@ Create a `.env` file in the root directory:
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_KEY=your_supabase_service_role_key
 SECRET_KEY=your_flask_secret_key
+
+# Email alerts (required for attendance warning emails)
+MAIL_USERNAME=your_email@gmail.com
+MAIL_PASSWORD=your_gmail_app_password
+```
+
+Notes:
+
+- `MAIL_USERNAME` should be a Gmail account used for sending alerts.
+- `MAIL_PASSWORD` must be a Gmail App Password, not your normal Gmail password.
+- Email alert functionality remains disabled if mail credentials are not configured.
+- Contributors without SMTP credentials can still run the project normally.
 ```
 
 ### Database Setup
@@ -89,7 +119,8 @@ CREATE TABLE students (
   reg_no VARCHAR(50) UNIQUE,
   department VARCHAR(50),
   class VARCHAR(50),
-  password VARCHAR(255)
+  password VARCHAR(255),
+  email VARCHAR(255)
 );
 
 CREATE TABLE attendance (
@@ -132,7 +163,10 @@ Visit `http://localhost:5000`
 
 ```
 AttendAI/
-├── app.py                              # Main Flask application
+├── app.py                              
+# Attendance email alert utilities
+├── alerts.py
+# Main Flask application        
 ├── face_utils.py                       # DeepFace utility (future upgrade)
 ├── train.py                            # Standalone training script
 ├── haarcascade_frontalface_default.xml # Face detection model
@@ -210,6 +244,41 @@ Photo    → EAR never drops → REJECTED ❌
 
 ---
 
+## 📧 Attendance Alert System
+
+AttendAI supports automated attendance warning emails.
+
+Admins can trigger attendance checks and automatically notify students whose attendance falls below a configurable threshold.
+
+### Workflow
+
+```
+Admin triggers attendance check
+          │
+          ▼
+Fetch all students from Supabase
+          │
+          ▼
+Calculate attendance percentage
+          │
+          ▼
+Below threshold?
+     YES / NO
+       │
+       ▼
+Send email warning via Flask-Mail
+```
+
+### Requirements
+
+- Gmail SMTP credentials configured in `.env`
+- Student email addresses stored in database
+- Flask-Mail installed
+
+Default threshold: `75%`
+
+---
+
 ## 📍 Roadmap
 
 - [x] Browser-based webcam capture
@@ -218,9 +287,9 @@ Photo    → EAR never drops → REJECTED ❌
 - [x] Supabase cloud database
 - [x] CSV export
 - [x] bcrypt auth
+- [x] Low attendance email alerts
 - [ ] QR-based student self-checkin
 - [ ] DeepFace / FaceNet upgrade
-- [ ] Low attendance email alerts
 - [ ] React Native mobile app
 
 ---

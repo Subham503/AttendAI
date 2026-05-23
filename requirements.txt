@@ -1,4 +1,5 @@
 flask>=3.0.0
+flask-limiter>=3.5.0
 opencv-contrib-python>=4.8.0
 bcrypt>=4.0.0
 numpy>=1.24.0
@@ -8,3 +9,4 @@ mediapipe>=0.10.0
 Pillow>=10.0.0
 reportlab>=4.0.0
 APScheduler>=3.10.0
+flask-mail==0.10.0

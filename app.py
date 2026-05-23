@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, redirect, Response, jsonify, session, make_response, send_file
 import cv2
 from datetime import datetime, timedelta
+from alerts import init_mail, send_low_attendance_alert
+from datetime import datetime
 from supabase import create_client
 import os
 import io
@@ -13,6 +15,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
 from report_engine import generate_attendance_pdf
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 # Reg-no must be purely alphanumeric with optional hyphens/underscores,
 # 2-30 characters. Rejects any path traversal sequence (dots, slashes, etc.).
@@ -23,6 +27,16 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "smartattend_secret_2024")
+limiter = Limiter(get_remote_address, app=app, storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://"))
+
+# Mail config from environment
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+
+if app.config['MAIL_USERNAME'] and app.config['MAIL_PASSWORD']:
+    init_mail(app)
+else:
+    print("Mail disabled - credentials not provided")
 
 supabase_client = create_client(
     os.getenv("SUPABASE_URL"),
@@ -139,6 +153,7 @@ def index():
 
 # ================= LOGIN PAGE =================
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute", methods=["POST"])
 def login():
     # Already logged in → go home
     if session.get('logged_in'):
@@ -185,6 +200,13 @@ def login():
         return jsonify({'success': False, 'message': 'Invalid student credentials.'})
 
     return jsonify({'success': False, 'message': 'Invalid credentials.'})
+
+
+@app.errorhandler(429)
+def too_many_requests(error):
+    if request.path == '/login' and request.method == 'POST':
+        return jsonify({'success': False, 'message': 'Too many login attempts. Please wait a minute and try again.'}), 429
+    return jsonify({'success': False, 'message': 'Too many requests.'}), 429
 
 # ================= LOGOUT =================
 @app.route('/logout')
@@ -540,6 +562,35 @@ def dashboard():
     return render_template("dashboard.html",
                            dept_data=dept_data,
                            subject_data=subject_data)
+
+# ================= ALERTS =================
+@app.route('/check-attendance-alerts', methods=['POST'])
+def check_attendance_alerts():
+    """Endpoint to trigger attendance alert checks"""
+
+    if not session.get('logged_in') or session.get('role') != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    threshold = float(request.json.get('threshold', 75.0))
+
+    students = supabase_client.table('students').select('*').execute()
+
+    total_alerts = 0
+
+    for student in students.data:
+        if student.get('email'):
+            alerts = send_low_attendance_alert(
+                app,
+                supabase_client,
+                student,
+                threshold
+            )
+            total_alerts += len(alerts)
+
+    return jsonify({
+        'message': f'Alert check complete. {total_alerts} alerts sent.',
+        'alerts_sent': total_alerts
+    })
 
 # ================= DELETE =================
 @app.route('/delete/<int:id>')
