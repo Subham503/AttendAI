@@ -438,6 +438,51 @@ def mark_attendance():
     else:
         return jsonify({'success': False, 'message': 'Face detected but not recognized. Re-register in better lighting.'})
 
+# ================= END SESSION =================
+@app.route('/end_session', methods=['POST'])
+def end_session():
+    if not session.get('logged_in'):
+        return jsonify({'success': False, 'message': 'Not logged in'}), 401
+    if session.get('role') not in ['admin', 'faculty']:
+        return jsonify({'success': False, 'message': 'Access denied: faculty or admin only'}), 403
+
+    data = request.get_json()
+    subject = data.get('subject', 'general').strip().lower()
+    department = data.get('department', 'general').strip().lower()
+
+    now = datetime.now()
+    date_str = str(now.date())
+    time_str = str(now.time())
+
+    try:
+        students_res = supabase_client.table('students').select('id, name, department, class').eq('department', department).execute()
+        all_students = students_res.data or []
+
+        attendance_res = supabase_client.table('attendance').select('student_id').eq('subject', subject).eq('date', date_str).execute()
+        present_student_ids = {record['student_id'] for record in (attendance_res.data or [])}
+
+        absent_records = []
+        for student in all_students:
+            if student['id'] not in present_student_ids:
+                absent_records.append({
+                    'student_id': student['id'],
+                    'name': student['name'],
+                    'department': student['department'],
+                    'class': student['class'],
+                    'subject': subject,
+                    'date': date_str,
+                    'time': time_str,
+                    'status': 'Absent'
+                })
+
+        if absent_records:
+            supabase_client.table('attendance').insert(absent_records).execute()
+
+        return jsonify({'success': True, 'message': f'Marked {len(absent_records)} absent.'})
+    except Exception as e:
+        print(f"DB ERROR in end_session: {e}")
+        return jsonify({'success': False, 'message': 'Error marking absentees.'}), 500
+
 # ================= ATTENDANCE =================
 @app.route('/attendance')
 def attendance():
