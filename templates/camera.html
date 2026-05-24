@@ -1356,7 +1356,7 @@
       scanTimer = setInterval(autoScan, SCAN_INTERVAL);
     }
 
-    function stopScanning() {
+    async function stopScanning() {
       scanning = false;
       clearInterval(scanTimer);
       scanTimer = null;
@@ -1366,6 +1366,23 @@
       scanPulse.classList.remove('active');
       camStatusText.textContent = 'STOPPED';
       showToast(`Session ended. ${totalMarked} student(s) marked.`, false);
+
+      const subject = document.getElementById('subjectInput').value.trim() || 'General';
+      const dept = document.getElementById('deptInput').value.trim() || 'General';
+
+      try {
+        const res = await fetch('/end_session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject, department: dept })
+        });
+        const result = await res.json();
+        if (result.success) {
+          setTimeout(() => showToast(`✅ ${result.message}`, false), 2000);
+        }
+      } catch (err) {
+        console.error('Error ending session:', err);
+      }
     }
 
     async function autoScan() {
