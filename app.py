@@ -1,15 +1,20 @@
-from flask import Flask, render_template, request, redirect, Response, jsonify, session
+from flask import Flask, render_template, request, redirect, Response, jsonify, session, make_response, send_file
 import cv2
+from datetime import datetime, timedelta
 from alerts import init_mail, send_low_attendance_alert
 from datetime import datetime
 from supabase import create_client
 import os
+import io
+import atexit
 import re
 import numpy as np
 import bcrypt
 import pickle
 from pathlib import Path
 from dotenv import load_dotenv
+from apscheduler.schedulers.background import BackgroundScheduler
+from report_engine import generate_attendance_pdf
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -450,6 +455,68 @@ def attendance():
         ))
         
     return render_template("attendance.html", data=data)
+
+# ================= SCHEDULER SETUP =================
+scheduler = BackgroundScheduler()
+
+def weekly_report_job():
+    print("Running weekly PDF report generation...")
+    try:
+        res = supabase_client.table('attendance').select('subject').execute()
+        subjects = set(r['subject'] for r in (res.data or []) if r.get('subject'))
+        
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=7)
+        
+        for subj in subjects:
+            pdf_bytes = generate_attendance_pdf(
+                supabase_client, 
+                subject=subj, 
+                start_date=str(start_date), 
+                end_date=str(end_date)
+            )
+            # TODO: Upload pdf_bytes to Supabase Storage or email to faculty
+            # to avoid local disk bloat as requested in PR review.
+            pass
+        print("Weekly reports generated (stateless mode).")
+    except Exception as e:
+        print(f"Error in weekly report job: {e}")
+
+# Run every Friday at 17:00 (5 PM)
+scheduler.add_job(func=weekly_report_job, trigger="cron", day_of_week='fri', hour=17, minute=0)
+scheduler.start()
+atexit.register(lambda: scheduler.shutdown(wait=False))
+
+# ================= EXPORT PDF =================
+@app.route('/export_pdf')
+def export_pdf():
+    if not session.get('logged_in'):
+        return redirect('/login')
+        
+    # Auth check: Only admin and faculty can export PDFs
+    if session.get('role') not in ['admin', 'faculty']:
+        return "Access Denied: Faculty/Admin only", 403
+        
+    start_date = request.args.get('start_date', '').strip()
+    end_date = request.args.get('end_date', '').strip()
+    subject = request.args.get('subject', '').strip().lower()
+    
+    if not start_date: start_date = None
+    if not end_date: end_date = None
+    if not subject: subject = None
+    
+    try:
+        pdf_bytes = generate_attendance_pdf(supabase_client, subject, start_date, end_date)
+        buffer = io.BytesIO(pdf_bytes)
+        buffer.seek(0)
+        return send_file(
+            buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f"attendance_report_{subject or 'all'}.pdf"
+        )
+    except Exception as e:
+        return f"Error generating PDF: {str(e)}"
 
 # ================= EXPORT CSV =================
 @app.route('/export_csv')

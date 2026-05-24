@@ -373,7 +373,20 @@
         Back
       </a>
       <div class="page-title">Attendance Records</div>
-      <div class="right-actions">
+      <div class="right-actions" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <form action="/export_pdf" method="GET" style="display: flex; gap: 8px; align-items: center;">
+          <input type="date" name="start_date" style="background: rgba(0, 255, 247, 0.05); border: 1px solid rgba(0, 255, 247, 0.2); color: var(--text); padding: 5px 8px; border-radius: 4px; font-family: 'Share Tech Mono', monospace; font-size: 10px; outline: none;">
+          <input type="date" name="end_date" style="background: rgba(0, 255, 247, 0.05); border: 1px solid rgba(0, 255, 247, 0.2); color: var(--text); padding: 5px 8px; border-radius: 4px; font-family: 'Share Tech Mono', monospace; font-size: 10px; outline: none;">
+          <input type="text" name="subject" placeholder="SUBJECT" style="background: rgba(0, 255, 247, 0.05); border: 1px solid rgba(0, 255, 247, 0.2); color: var(--text); padding: 5px 8px; border-radius: 4px; font-family: 'Share Tech Mono', monospace; font-size: 10px; width: 70px; outline: none; text-transform: uppercase;">
+          <button type="submit" class="export-btn" style="background: rgba(255, 0, 229, 0.08); border-color: rgba(255, 0, 229, 0.35); color: rgba(255, 0, 229, 0.7); cursor: pointer;">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="stroke: currentColor;">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            PDF
+          </button>
+        </form>
+        
         <div class="record-count">{{ data|length }} RECORDS</div>
         <a href="/export_csv" class="export-btn">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -381,7 +394,7 @@
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
-          Export CSV
+          CSV
         </a>
       </div>
     </div>

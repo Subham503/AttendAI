@@ -7,4 +7,6 @@ python-dotenv>=1.0.0
 supabase>=2.0.0
 mediapipe>=0.10.0
 Pillow>=10.0.0
+reportlab>=4.0.0
+APScheduler>=3.10.0
 flask-mail==0.10.0
