@@ -17,6 +17,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from report_engine import generate_attendance_pdf
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from liveness import verify_liveness
 
 # Reg-no must be purely alphanumeric with optional hyphens/underscores,
 # 2-30 characters. Rejects any path traversal sequence (dots, slashes, etc.).
@@ -389,6 +390,10 @@ def mark_attendance():
 
     if frame is None:
         return jsonify({'success': False, 'message': 'Invalid image received'})
+
+    # --- Server-Side Liveness Verification ---
+    if not verify_liveness(frame):
+        return jsonify({'success': False, 'message': 'Liveness check failed. Spoofing detected or no clear face.'})
 
     face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
     gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
