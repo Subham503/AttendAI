@@ -1012,6 +1012,36 @@
     <div class="main-layout">
       <!-- Camera -->
       <div class="camera-panel">
+        <!-- Camera Selector -->
+        <div id="camSelectorWrap" style="
+          position:absolute; top:10px; right:10px;
+          z-index:5; display:flex; gap:6px; align-items:center;
+        ">
+          <select id="cameraSelect" title="Select camera device" style="
+            background:rgba(2,8,16,0.85);
+            color:var(--neon-cyan);
+            border:1px solid rgba(0,255,247,0.3);
+            border-radius:6px;
+            padding:4px 8px;
+            font-family:'Share Tech Mono',monospace;
+            font-size:10px;
+            letter-spacing:1px;
+            cursor:pointer;
+            outline:none;
+          ">
+            <option>DETECTING...</option>
+          </select>
+          <button onclick="switchCamera()" style="
+            background:rgba(0,255,247,0.08);
+            border:1px solid rgba(0,255,247,0.3);
+            border-radius:6px;
+            padding:4px 10px;
+            color:var(--neon-cyan);
+            font-family:'Share Tech Mono',monospace;
+            font-size:10px;
+            cursor:pointer;
+          ">SWITCH</button>
+        </div>
         <video id="videoFeed" class="camera-feed" autoplay playsinline muted></video>
 
         <!-- Step 1: Blink overlay -->
@@ -1308,11 +1338,60 @@
     }
 
     // ── Camera init + MediaPipe loop ──────────────────────────────
+    let currentStream = null;
+    let selectedDeviceId = localStorage.getItem('preferredCameraId') || null;
+
     async function initCamera() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
+        // Request permission first so device labels are visible
+        const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        tempStream.getTracks().forEach(t => t.stop());
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
+
+        const select = document.getElementById('cameraSelect');
+        select.innerHTML = '';
+
+        videoDevices.forEach((device, index) => {
+          const opt = document.createElement('option');
+          opt.value = device.deviceId;
+          opt.text = device.label || `CAMERA ${index + 1}`;
+          if (device.deviceId === selectedDeviceId) opt.selected = true;
+          select.appendChild(opt);
         });
+
+        // Hide selector if only one camera
+        if (videoDevices.length <= 1) {
+          document.getElementById('camSelectorWrap').style.display = 'none';
+        }
+
+        if (!selectedDeviceId && videoDevices.length > 0) {
+          selectedDeviceId = videoDevices[0].deviceId;
+        }
+
+        await startCameraStream(selectedDeviceId);
+
+      } catch (err) {
+        camStatusText.textContent = 'ERROR';
+        showToast('Camera access denied.', true);
+      }
+    }
+
+    async function startCameraStream(deviceId) {
+      if (currentStream) {
+        currentStream.getTracks().forEach(t => t.stop());
+      }
+
+      const constraints = {
+        video: deviceId
+          ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+          : { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
+      };
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        currentStream = stream;
         video.srcObject = stream;
         video.onloadedmetadata = () => {
           canvas.width = video.videoWidth;
@@ -1333,9 +1412,19 @@
         });
         mpCam.start();
       } catch (err) {
-        camStatusText.textContent = 'ERROR';
-        showToast('Camera access denied.', true);
+        // Fallback to default
+        if (deviceId) await startCameraStream(null);
+        else showToast('Camera error: ' + err.message, true);
       }
+    }
+
+    async function switchCamera() {
+      const select = document.getElementById('cameraSelect');
+      selectedDeviceId = select.value;
+      localStorage.setItem('preferredCameraId', selectedDeviceId);
+      resetVerification();
+      await startCameraStream(selectedDeviceId);
+      showToast('📷 Camera switched!', false);
     }
 
     // ── Scanning ──────────────────────────────────────────────────
