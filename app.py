@@ -2,7 +2,6 @@ from flask import Flask, render_template, request, redirect, Response, jsonify, 
 import cv2
 from datetime import datetime, timedelta
 from alerts import init_mail, send_low_attendance_alert
-from datetime import datetime
 from supabase import create_client
 import os
 import io
@@ -40,14 +39,6 @@ limiter = Limiter(
     storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://")
 )
 
-# Mail config from environment
-app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
-
-if app.config['MAIL_USERNAME'] and app.config['MAIL_PASSWORD']:
-    init_mail(app)
-else:
-    print("Mail disabled - credentials not provided")
 
 supabase_client = create_client(
     os.getenv("SUPABASE_URL"),
@@ -176,8 +167,6 @@ def require_login():
 # ================= HOME — protected =================
 @app.route('/')
 def index():
-    if not session.get('logged_in'):
-        return redirect('/login')   # ✅ redirect to login if not logged in
     return render_template("index.html")
 
 # ================= LOGIN PAGE =================
