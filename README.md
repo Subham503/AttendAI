@@ -94,6 +94,7 @@ Create a `.env` file in the root directory:
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_KEY=your_supabase_service_role_key
 SECRET_KEY=your_flask_secret_key
+SESSION_TIMEOUT_MINUTES=30
 
 # Email alerts (required for attendance warning emails)
 MAIL_USERNAME=your_email@gmail.com
