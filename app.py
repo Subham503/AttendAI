@@ -2,7 +2,6 @@ from flask import Flask, render_template, request, redirect, Response, jsonify, 
 import cv2
 from datetime import datetime, timedelta
 from alerts import init_mail, send_low_attendance_alert
-from datetime import datetime
 from supabase import create_client
 import os
 import io
@@ -28,16 +27,18 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "smartattend_secret_2024")
-limiter = Limiter(get_remote_address, app=app, storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://"))
 
-# Mail config from environment
-app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+# Session timeout configuration
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(
+    minutes=int(os.getenv("SESSION_TIMEOUT_MINUTES", 30))
+)
 
-if app.config['MAIL_USERNAME'] and app.config['MAIL_PASSWORD']:
-    init_mail(app)
-else:
-    print("Mail disabled - credentials not provided")
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://")
+)
+
 
 supabase_client = create_client(
     os.getenv("SUPABASE_URL"),
@@ -145,11 +146,27 @@ def train_model():
 # Load model once at startup
 load_model()
 
+# ================= SESSION PROTECTION =================
+@app.before_request
+def require_login():
+
+    public_routes = [
+    '/login',
+    '/register',
+    '/static',
+]
+
+    # Allow public pages
+    if any(request.path.startswith(route) for route in public_routes):
+        return
+
+    # Redirect if session expired or not logged in
+    if not session.get('logged_in'):
+        return redirect('/login')
+
 # ================= HOME — protected =================
 @app.route('/')
 def index():
-    if not session.get('logged_in'):
-        return redirect('/login')   # ✅ redirect to login if not logged in
     return render_template("index.html")
 
 # ================= LOGIN PAGE =================
@@ -173,6 +190,7 @@ def login():
         result = supabase_client.table('admins').select('password').eq('username', username).execute()
         user = result.data[0] if result.data else None
         if user and bcrypt.checkpw(password.encode(), user['password'].encode()):
+            session.permanent = True
             session['logged_in'] = True
             session['role']      = 'admin'
             session['name']      = username
@@ -183,6 +201,7 @@ def login():
         result = supabase_client.table('faculty').select('password, name').eq('faculty_id', username).execute()
         user = result.data[0] if result.data else None
         if user and bcrypt.checkpw(password.encode(), user['password'].encode()):
+            session.permanent = True
             session['logged_in'] = True
             session['role']      = 'faculty'
             session['name']      = user['name'] if user['name'] else username
@@ -193,6 +212,7 @@ def login():
         result = supabase_client.table('students').select('password, name').eq('reg_no', username).execute()
         user = result.data[0] if result.data else None
         if user and bcrypt.checkpw(password.encode(), user['password'].encode()):
+            session.permanent = True
             session['logged_in'] = True
             session['role']      = 'student'
             session['name']      = user['name']
