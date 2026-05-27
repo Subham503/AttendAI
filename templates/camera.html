@@ -1007,6 +1007,26 @@
       <div class="live-badge">
         <div class="live-dot"></div>LIVE
       </div>
+      <!-- DB Status Indicator (Issue #43) -->
+      <div id="dbStatusIndicator" style="
+        display: flex; align-items: center; gap: 6px;
+        font-family: 'Share Tech Mono', monospace;
+        font-size: 10px; letter-spacing: 2px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        border: 1px solid rgba(0,255,100,0.3);
+        background: rgba(0,255,100,0.07);
+        color: var(--neon-green);
+        transition: all 0.4s;
+      ">
+        <span id="dbStatusDot" style="
+          width:7px; height:7px; border-radius:50%;
+          background: var(--neon-green);
+          display:inline-block;
+          transition: background 0.4s;
+        "></span>
+        <span id="dbStatusText">🟢 DB CONNECTED</span>
+      </div>
     </div>
 
     <div class="main-layout">
@@ -1474,10 +1494,38 @@
       }
     }
 
+    // ── DB Status helpers (Issue #43) ─────────────────────────────
+    function setDbStatus(state) {
+      const indicator = document.getElementById('dbStatusIndicator');
+      const dot       = document.getElementById('dbStatusDot');
+      const text      = document.getElementById('dbStatusText');
+      const styles = {
+        CLOSED:    { color: 'var(--neon-green)',  border: 'rgba(0,255,100,0.3)',  bg: 'rgba(0,255,100,0.07)',  dot: 'var(--neon-green)',  label: '🟢 DB CONNECTED' },
+        RETRYING:  { color: 'var(--neon-amber)',  border: 'rgba(255,179,0,0.4)',  bg: 'rgba(255,179,0,0.08)',  dot: 'var(--neon-amber)',  label: '🟡 DB RETRYING'  },
+        OPEN:      { color: '#ff4455',            border: 'rgba(255,68,85,0.4)',   bg: 'rgba(255,68,85,0.07)',  dot: '#ff4455',            label: '🔴 DB OFFLINE'   },
+        HALF_OPEN: { color: 'var(--neon-amber)',  border: 'rgba(255,179,0,0.4)',  bg: 'rgba(255,179,0,0.08)',  dot: 'var(--neon-amber)',  label: '🟡 DB PROBING'   },
+      };
+      const s = styles[state] || styles.CLOSED;
+      indicator.style.color      = s.color;
+      indicator.style.border      = `1px solid ${s.border}`;
+      indicator.style.background  = s.bg;
+      dot.style.background        = s.dot;
+      text.textContent            = s.label;
+    }
+
+    // Poll breaker state every 10 s (lightweight)
+    setInterval(async () => {
+      try {
+        const r = await fetch('/db_status');
+        const j = await r.json();
+        setDbStatus(j.state);
+      } catch (_) { /* ignore if fetch fails */ }
+    }, 10_000);
+
     async function autoScan() {
       if (!scanning) return;
       const subject = document.getElementById('subjectInput').value.trim() || 'General';
-      const dept = document.getElementById('deptInput').value.trim() || 'General';
+      const dept    = document.getElementById('deptInput').value.trim()    || 'General';
 
       const ctx = canvas.getContext('2d');
       ctx.save(); ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
@@ -1490,13 +1538,33 @@
       totalScans++;
       scanCount.textContent = totalScans;
 
+      // Optimistic: show retrying state while request is in-flight
+      setDbStatus('RETRYING');
+
       try {
-        const res = await fetch('/mark_attendance', {
+        const res    = await fetch('/mark_attendance', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: imageData, subject, department: dept })
         });
         const result = await res.json();
-        const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        const time   = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+        // ── DB state handling ─────────────────────────────────────
+        if (result.db_state) {
+          setDbStatus(result.db_state);   // server reported breaker state
+        }
+
+        if (result.message === 'DB_OFFLINE') {
+          showToast('🔴 Database offline. Attendance not saved.', true);
+          return;
+        }
+        if (result.message === 'DB_ERROR') {
+          showToast('⚠️ DB error — retrying next scan.', true);
+          return;
+        }
+
+        // ── Normal attendance handling ────────────────────────────
+        setDbStatus('CLOSED');   // got a real response → connection healthy
 
         if (result.success) {
           const name = result.message.replace('✅ Marked: ', '');
@@ -1510,13 +1578,17 @@
           addToLog(name, time, 'skipped');
           showNameOverlay('⚠️ ' + name);
         } else if (result.message.includes('No face')) {
-          // silent
+          // silent — same as before
         } else {
           addToLog('Unknown', time, 'unknown');
         }
-      } catch (err) { console.error('Scan error:', err); }
-    }
 
+      } catch (err) {
+        setDbStatus('OPEN');
+        showToast('🔴 Network error — cannot reach server.', true);
+        console.error('Scan error:', err);
+      }
+    }
     // ── UI helpers ────────────────────────────────────────────────
     function addToLog(name, time, type) {
       const empty = markedList.querySelector('.empty-list');
