@@ -6,6 +6,7 @@ import os
 import re
 import numpy as np
 import bcrypt
+import time as _time
 import pickle
 from pathlib import Path
 from dotenv import load_dotenv
@@ -338,6 +339,77 @@ def camera():
                            subject=current_subject,
                            department=current_department)
 
+
+class CircuitBreaker:
+    """
+    States: CLOSED (normal) → OPEN (failing) → HALF_OPEN (probing) → CLOSED
+    failure_threshold : consecutive failures before opening
+    recovery_timeout  : seconds to wait before probing again (HALF_OPEN)
+    """
+    CLOSED    = 'CLOSED'
+    OPEN      = 'OPEN'
+    HALF_OPEN = 'HALF_OPEN'
+
+    def __init__(self, failure_threshold=3, recovery_timeout=30):
+        self.failure_threshold  = failure_threshold
+        self.recovery_timeout   = recovery_timeout
+        self._state             = self.CLOSED
+        self._failure_count     = 0
+        self._opened_at         = None
+
+    @property
+    def state(self):
+        # Auto-transition OPEN → HALF_OPEN after recovery_timeout
+        if self._state == self.OPEN:
+            if _time.time() - self._opened_at >= self.recovery_timeout:
+                self._state = self.HALF_OPEN
+        return self._state
+
+    def record_success(self):
+        self._failure_count = 0
+        self._state         = self.CLOSED
+
+    def record_failure(self):
+        self._failure_count += 1
+        if self._failure_count >= self.failure_threshold:
+            self._state    = self.OPEN
+            self._opened_at = _time.time()
+
+    def is_open(self):
+        return self.state == self.OPEN   # blocks calls when True
+
+
+# Singleton breaker — module level, NOT inside the class
+_supabase_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=30)
+
+
+def supabase_with_retry(operation_fn):
+    """
+    Wraps a Supabase call with:
+      - Circuit breaker check (raises RuntimeError if OPEN)
+      - Exponential backoff retry: 3 attempts, delays 0.5s → 1s → 2s
+    """
+    if _supabase_breaker.is_open():
+        raise RuntimeError("DB_OPEN")
+
+    delays   = [0.5, 1.0, 2.0]
+    last_err = None
+
+    for attempt, delay in enumerate(delays, start=1):
+        try:
+            result = operation_fn()
+            _supabase_breaker.record_success()
+            return result
+        except Exception as e:
+            last_err = e
+            print(f"[Supabase] Attempt {attempt}/3 failed: {e}")
+            _supabase_breaker.record_failure()
+            if attempt < len(delays):
+                _time.sleep(delay)
+
+    raise last_err   # ← inside the function now, all 3 attempts exhausted
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ================= MARK ATTENDANCE =================
 @app.route('/mark_attendance', methods=['POST'])
 def mark_attendance():
@@ -387,23 +459,60 @@ def mark_attendance():
         now = datetime.now()
         
         try:
-            existing = supabase_client.table('attendance').select('id').eq('student_id', student_id).ilike('subject', current_subject).eq('date', str(now.date())).execute()
+            # ── Layer 1+2: retry + circuit breaker on SELECT ──────
+            try:
+                existing = supabase_with_retry(
+                    lambda sid=student_id: supabase_client
+                        .table('attendance')
+                        .select('id')
+                        .eq('student_id', sid)
+                        .ilike('subject', current_subject)
+                        .eq('date', str(now.date()))
+                        .execute()
+                )
+            except RuntimeError as e:
+                if 'DB_OPEN' not in str(e):
+                    raise
+                return jsonify({
+                    'success': False,
+                    'message': 'DB_OFFLINE',
+                    'db_state': 'OPEN'
+                })
+
             if existing.data:
                 skipped_names.append(name)
             else:
-                supabase_client.table('attendance').insert({
-                    'student_id': student_id,
-                    'name': name,
-                    'department': dept,
-                    'class': cls,
-                    'subject': current_subject,
-                    'date': str(now.date()),
-                    'time': str(now.time()),
-                    'status': 'Present'
-                }).execute()
-                marked_names.append(name)
+                # ── Layer 1+2: retry + circuit breaker on INSERT ──
+                try:
+                    supabase_with_retry(
+                        lambda: supabase_client.table('attendance').insert({
+                            'student_id': student_id,
+                            'name':       name,
+                            'department': dept,
+                            'class':      cls,
+                            'subject':    current_subject,
+                            'date':       str(now.date()),
+                            'time':       str(now.time()),
+                            'status':     'Present'
+                        }).execute()
+                    )
+                    marked_names.append(name)
+                except RuntimeError as e:
+                    if 'DB_OPEN' in str(e):
+                        return jsonify({
+                            'success': False,
+                            'message': 'DB_OFFLINE',
+                            'db_state': 'OPEN'
+                        })
+                    raise
+
         except Exception as e:
             print(f"DB ERROR: {e}")
+            return jsonify({
+                'success': False,
+                'message': 'DB_ERROR',
+                'db_state': _supabase_breaker.state
+            })
 
     if marked_names:
         return jsonify({'success': True, 'message': f'✅ Marked: {", ".join(marked_names)}'})
@@ -485,6 +594,12 @@ def delete(id):
 
     supabase_client.table('attendance').delete().eq('id', id).execute()
     return redirect('/attendance')
+
+
+@app.route('/db_status')
+def db_status():
+    """Returns current circuit breaker state for the UI indicator."""
+    return jsonify({'state': _supabase_breaker.state})
 
 # ================= RUN =================
 if __name__ == "__main__":
