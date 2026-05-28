@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, Response, jsonify, session, make_response, send_file
 import cv2
 from datetime import datetime, timedelta
+from html import unescape
 from alerts import init_mail, send_low_attendance_alert
 from supabase import create_client
 import os
@@ -53,6 +54,13 @@ CLASS_CONTEXT_SESSION_KEY = "class_session_context"
 def normalize_class_context_value(value):
     value = (value or "general").strip().lower()
     return value or "general"
+
+
+def sanitize_text_field(value):
+    text = unescape(str(value or "")).strip()
+    text = re.sub(r"<[^>]*>", "", text)
+    text = re.sub(r"[\x00-\x1f\x7f]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def set_class_session_context(subject, department):
@@ -426,10 +434,10 @@ def register():
 
     import base64
     data = request.get_json(force=True, silent=True) or {}
-    name       = data.get('name', '').strip()
+    name       = sanitize_text_field(data.get('name', ''))
     reg_no     = data.get('reg_no', '').strip().upper()
-    department = data.get('department', '').strip().upper()
-    class_name = data.get('class_name', '').strip()
+    department = sanitize_text_field(data.get('department', '')).upper()
+    class_name = sanitize_text_field(data.get('class_name', ''))
     password   = data.get('password', '').strip()
     frames     = data.get('frames', [])
 
