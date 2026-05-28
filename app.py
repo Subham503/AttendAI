@@ -47,8 +47,30 @@ supabase_client = create_client(
     os.getenv("SUPABASE_KEY")
 )
 
-current_subject = "general"
-current_department = "general"
+CLASS_CONTEXT_SESSION_KEY = "class_session_context"
+
+
+def normalize_class_context_value(value):
+    value = (value or "general").strip().lower()
+    return value or "general"
+
+
+def set_class_session_context(subject, department):
+    context = {
+        "subject": normalize_class_context_value(subject),
+        "department": normalize_class_context_value(department),
+    }
+    session[CLASS_CONTEXT_SESSION_KEY] = context
+    session.modified = True
+    return context
+
+
+def get_class_session_context(data=None):
+    data = data or {}
+    stored = session.get(CLASS_CONTEXT_SESSION_KEY) or {}
+    subject = data.get("subject") or stored.get("subject") or request.args.get("subject")
+    department = data.get("department") or stored.get("department") or request.args.get("department")
+    return set_class_session_context(subject, department)
 
 
 def _normalize_scope_value(value):
@@ -392,6 +414,7 @@ def class_session():
         department = request.form.get('department', 'general').strip().lower()
         if not _current_user_can_access_class(department, subject):
             return render_template('403.html'), 403
+        set_class_session_context(subject, department)
         return redirect(f'/camera?subject={subject}&department={department}')
     return render_template("class_session.html")
 
@@ -481,18 +504,16 @@ def register():
 # ================= CAMERA PAGE =================
 @app.route('/camera')
 def camera():
-    global current_subject, current_department
     if not session.get('logged_in'):
         return redirect('/login')
     if session.get('role') not in ['admin', 'faculty']:
         return render_template('403.html'), 403
-    current_subject    = request.args.get('subject', 'general').strip().lower()
-    current_department = request.args.get('department', 'general').strip().lower()
-    if not _current_user_can_access_class(current_department, current_subject):
+    context = get_class_session_context()
+    if not _current_user_can_access_class(context["department"], context["subject"]):
         return render_template('403.html'), 403
     return render_template("camera.html",
-                           subject=current_subject,
-                           department=current_department)
+                           subject=context["subject"],
+                           department=context["department"])
 
 class CircuitBreaker:
     """
@@ -578,17 +599,17 @@ def supabase_with_retry(operation_fn):
 # ================= MARK ATTENDANCE =================
 @app.route('/mark_attendance', methods=['POST'])
 def mark_attendance():
-    global current_subject, current_department
     if not session.get('logged_in'):
         return jsonify({'success': False, 'message': 'Not logged in'}), 401
     if session.get('role') not in ['admin', 'faculty']:
         return jsonify({'success': False, 'message': 'Access denied: faculty or admin only'}), 403
 
-    data       = request.get_json()
+    data       = request.get_json(silent=True) or {}
     image_data = data.get('image', '')
-    current_subject    = data.get('subject', 'general').strip().lower()
-    current_department = data.get('department', 'general').strip().lower()
-    if not _current_user_can_access_class(current_department, current_subject):
+    context = get_class_session_context(data)
+    subject = context["subject"]
+    department = context["department"]
+    if not _current_user_can_access_class(department, subject):
         return jsonify({'success': False, 'message': 'Access denied for this department or subject'}), 403
 
     if not global_label_map:
@@ -637,7 +658,7 @@ def mark_attendance():
                         .table('attendance')
                         .select('id')
                         .eq('student_id', sid)
-                        .ilike('subject', current_subject)
+                        .ilike('subject', subject)
                         .eq('date', str(now.date()))
                         .execute()
                 )
@@ -661,7 +682,7 @@ def mark_attendance():
                             'name':       name,
                             'department': dept,
                             'class':      cls,
-                            'subject':    current_subject,
+                            'subject':    subject,
                             'date':       str(now.date()),
                             'time':       str(now.time()),
                             'status':     'Present'
@@ -700,9 +721,10 @@ def end_session():
     if session.get('role') not in ['admin', 'faculty']:
         return jsonify({'success': False, 'message': 'Access denied: faculty or admin only'}), 403
 
-    data = request.get_json()
-    subject = data.get('subject', 'general').strip().lower()
-    department = data.get('department', 'general').strip().lower()
+    data = request.get_json(silent=True) or {}
+    context = get_class_session_context(data)
+    subject = context["subject"]
+    department = context["department"]
     if not _current_user_can_access_class(department, subject):
         return jsonify({'success': False, 'message': 'Access denied for this department or subject'}), 403
 
@@ -734,6 +756,7 @@ def end_session():
         if absent_records:
             supabase_client.table('attendance').insert(absent_records).execute()
 
+        session.pop(CLASS_CONTEXT_SESSION_KEY, None)
         return jsonify({'success': True, 'message': f'Marked {len(absent_records)} absent.'})
     except Exception as e:
         print(f"DB ERROR in end_session: {e}")
