@@ -36,10 +36,32 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(
     minutes=int(os.getenv("SESSION_TIMEOUT_MINUTES", 30))
 )
 
+# Rate limiter.
+# In production, set RATELIMIT_STORAGE_URI to a Redis URL so counters
+# survive process restarts and are shared across all workers:
+#   RATELIMIT_STORAGE_URI=redis://:password@host:6379/0
+# Without Redis, each process restart resets all counters, and each
+# gunicorn worker tracks its own counters independently, effectively
+# multiplying the configured limit by the number of workers.
+_RATELIMIT_STORAGE = os.getenv(
+    "RATELIMIT_STORAGE_URI",
+    os.getenv("REDIS_URL", "memory://"),
+)
+if _RATELIMIT_STORAGE == "memory://":
+    import warnings
+    warnings.warn(
+        "Rate limiter is using in-memory storage. Counters reset on restart "
+        "and are not shared across workers. Set RATELIMIT_STORAGE_URI to a "
+        "Redis URL in production.",
+        RuntimeWarning,
+        stacklevel=1,
+    )
+
 limiter = Limiter(
     get_remote_address,
     app=app,
-    storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://")
+    storage_uri=_RATELIMIT_STORAGE,
+    default_limits=["200 per day", "50 per hour"],
 )
 
 
