@@ -1,5 +1,5 @@
 flask>=3.0.0
-flask-limiter>=3.5.0
+flask-limiter[redis]>=3.5.0
 opencv-contrib-python>=4.8.0
 bcrypt>=4.0.0
 numpy>=1.24.0
