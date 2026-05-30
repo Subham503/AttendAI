@@ -429,6 +429,12 @@ def class_session():
 # ================= REGISTER =================
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    # Auth check — must be logged in and admin
+    if 'user' not in session:
+        return redirect('/login')
+    if session.get('role') != 'admin':
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403   # or: abort(403)
+    
     if request.method == 'GET':
         return render_template("register.html")
 
