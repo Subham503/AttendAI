@@ -8,8 +8,10 @@ import io
 import atexit
 import re
 import threading
+import threading
 import numpy as np
 import bcrypt
+import time as _time
 import time as _time
 import pickle
 from pathlib import Path
@@ -53,6 +55,106 @@ supabase_client = create_client(
 
 current_subject = "general"
 current_department = "general"
+
+
+def _normalize_scope_value(value):
+    if value is None:
+        return ""
+    return str(value).strip().lower()
+
+
+def _parse_scope_list(value):
+    if not value:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        raw_values = value
+    else:
+        raw_values = re.split(r"[,;\n|]+", str(value))
+    return sorted({
+        normalized
+        for item in raw_values
+        if (normalized := _normalize_scope_value(item))
+    })
+
+
+def _extract_faculty_subjects(user):
+    for key in ("subjects", "assigned_subjects", "subject"):
+        subjects = _parse_scope_list(user.get(key))
+        if subjects:
+            return subjects
+    return []
+
+
+def _current_faculty_scope():
+    if session.get("role") != "faculty":
+        return None
+    return {
+        "department": _normalize_scope_value(session.get("faculty_department")),
+        "subjects": _parse_scope_list(session.get("faculty_subjects")),
+    }
+
+
+def _scope_has_limits(scope):
+    return bool(scope and (scope["department"] or scope["subjects"]))
+
+
+def _record_matches_faculty_scope(record, scope):
+    if not _scope_has_limits(scope):
+        return False
+
+    if scope["department"]:
+        record_department = _normalize_scope_value(record.get("department"))
+        if record_department != scope["department"]:
+            return False
+
+    if scope["subjects"]:
+        record_subject = _normalize_scope_value(record.get("subject"))
+        if record_subject not in scope["subjects"]:
+            return False
+
+    return True
+
+
+def _current_user_can_access_class(department, subject):
+    if session.get("role") != "faculty":
+        return True
+
+    scope = _current_faculty_scope()
+    if not _scope_has_limits(scope):
+        return False
+
+    if scope["department"] and _normalize_scope_value(department) != scope["department"]:
+        return False
+
+    if scope["subjects"] and _normalize_scope_value(subject) not in scope["subjects"]:
+        return False
+
+    return True
+
+
+def _attendance_query_for_current_user(select_columns="*"):
+    query = supabase_client.table("attendance").select(select_columns)
+    scope = _current_faculty_scope()
+
+    if session.get("role") != "faculty":
+        return query
+
+    if not _scope_has_limits(scope):
+        return None
+
+    if scope["department"]:
+        query = query.ilike("department", scope["department"])
+    if scope["subjects"]:
+        query = query.in_("subject", scope["subjects"])
+    return query
+
+
+def _fetch_scoped_attendance(select_columns="*"):
+    query = _attendance_query_for_current_user(select_columns)
+    if query is None:
+        return []
+    result = query.execute()
+    return result.data or []
 
 
 def _normalize_scope_value(value):
@@ -305,12 +407,16 @@ def login():
 
     elif role == 'faculty':
         result = supabase_client.table('faculty').select('*').eq('faculty_id', username).execute()
+        result = supabase_client.table('faculty').select('*').eq('faculty_id', username).execute()
         user = result.data[0] if result.data else None
         if user and bcrypt.checkpw(password.encode(), user['password'].encode()):
             session.permanent = True
             session['logged_in'] = True
             session['role']      = 'faculty'
             session['name']      = user['name'] if user['name'] else username
+            session['faculty_id'] = username
+            session['faculty_department'] = _normalize_scope_value(user.get('department'))
+            session['faculty_subjects'] = _extract_faculty_subjects(user)
             session['faculty_id'] = username
             session['faculty_department'] = _normalize_scope_value(user.get('department'))
             session['faculty_subjects'] = _extract_faculty_subjects(user)
@@ -394,6 +500,8 @@ def class_session():
     if request.method == 'POST':
         subject    = request.form.get('subject', 'general').strip().lower()
         department = request.form.get('department', 'general').strip().lower()
+        if not _current_user_can_access_class(department, subject):
+            return render_template('403.html'), 403
         if not _current_user_can_access_class(department, subject):
             return render_template('403.html'), 403
         return redirect(f'/camera?subject={subject}&department={department}')
@@ -494,9 +602,92 @@ def camera():
     current_department = request.args.get('department', 'general').strip().lower()
     if not _current_user_can_access_class(current_department, current_subject):
         return render_template('403.html'), 403
+    if not _current_user_can_access_class(current_department, current_subject):
+        return render_template('403.html'), 403
     return render_template("camera.html",
                            subject=current_subject,
                            department=current_department)
+
+class CircuitBreaker:
+    """
+    Thread-safe circuit breaker.
+    States: CLOSED (normal) → OPEN (failing) → HALF_OPEN (probing) → CLOSED
+
+    ⚠️ KNOWN LIMITATION: supabase_with_retry() uses time.sleep() for backoff
+    delays (0.5s → 1s → 2s). Since Flask is synchronous, this blocks the
+    entire thread during retries — meaning other requests queue up for up to
+    3.5s per failed Supabase call. Acceptable for this use case (low-traffic
+    classroom tool), but should be replaced with async/gevent if concurrency
+    becomes a concern.
+    """
+    CLOSED    = 'CLOSED'
+    OPEN      = 'OPEN'
+    HALF_OPEN = 'HALF_OPEN'
+
+    def __init__(self, failure_threshold=3, recovery_timeout=30):
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout  = recovery_timeout
+        self._state            = self.CLOSED
+        self._failure_count    = 0
+        self._opened_at        = None
+        self._lock             = threading.Lock()   # 🔒 guards all state transitions
+
+    @property
+    def state(self):
+        with self._lock:
+            if self._state == self.OPEN:
+                if _time.time() - self._opened_at >= self.recovery_timeout:
+                    self._state = self.HALF_OPEN
+            return self._state
+
+    def record_success(self):
+        with self._lock:
+            self._failure_count = 0
+            self._state         = self.CLOSED
+
+    def record_failure(self):
+        with self._lock:
+            self._failure_count += 1
+            if self._failure_count >= self.failure_threshold:
+                self._state     = self.OPEN
+                self._opened_at = _time.time()
+
+    def is_open(self):
+        return self.state == self.OPEN
+
+
+# Module-level singleton shared across all requests
+_supabase_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=30)
+
+
+def supabase_with_retry(operation_fn):
+    """
+    Wraps a Supabase call with circuit breaker + exponential backoff retry.
+    3 attempts with delays: 0.5s → 1s → 2s.
+
+    ⚠️ NOTE: time.sleep() here blocks the Flask thread for up to 3.5s on
+    full retry exhaustion. See CircuitBreaker docstring for details.
+    """
+    if _supabase_breaker.is_open():
+        raise RuntimeError("DB_OPEN")
+
+    delays   = [0.5, 1.0, 2.0]
+    last_err = None
+
+    for attempt, delay in enumerate(delays, start=1):
+        try:
+            result = operation_fn()
+            _supabase_breaker.record_success()
+            return result
+        except Exception as e:
+            last_err = e
+            print(f"[Supabase] Attempt {attempt}/3 failed: {e}")
+            _supabase_breaker.record_failure()
+            if attempt < len(delays):
+                _time.sleep(delay)   # ⚠️ blocks thread — see docstring above
+
+    raise last_err
+# ─────────────────────────────────────────────────────────────────────────────
 
 class CircuitBreaker:
     """
@@ -594,6 +785,8 @@ def mark_attendance():
     current_department = data.get('department', 'general').strip().lower()
     if not _current_user_can_access_class(current_department, current_subject):
         return jsonify({'success': False, 'message': 'Access denied for this department or subject'}), 403
+    if not _current_user_can_access_class(current_department, current_subject):
+        return jsonify({'success': False, 'message': 'Access denied for this department or subject'}), 403
 
     if not global_label_map:
         return jsonify({'success': False, 'message': 'Model not trained. Admin must run /retrain first.'})
@@ -654,9 +847,53 @@ def mark_attendance():
                     'db_state': 'OPEN'
                 })
 
+            # ── Layer 1+2: retry + circuit breaker on SELECT ──────
+            try:
+                existing = supabase_with_retry(
+                    lambda sid=student_id: supabase_client
+                        .table('attendance')
+                        .select('id')
+                        .eq('student_id', sid)
+                        .ilike('subject', current_subject)
+                        .eq('date', str(now.date()))
+                        .execute()
+                )
+            except RuntimeError as e:
+                if 'DB_OPEN' not in str(e):
+                    raise
+                return jsonify({
+                    'success': False,
+                    'message': 'DB_OFFLINE',
+                    'db_state': 'OPEN'
+                })
+
             if existing.data:
                 skipped_names.append(name)
             else:
+                # ── Layer 1+2: retry + circuit breaker on INSERT ──
+                try:
+                    supabase_with_retry(
+                        lambda: supabase_client.table('attendance').insert({
+                            'student_id': student_id,
+                            'name':       name,
+                            'department': dept,
+                            'class':      cls,
+                            'subject':    current_subject,
+                            'date':       str(now.date()),
+                            'time':       str(now.time()),
+                            'status':     'Present'
+                        }).execute()
+                    )
+                    marked_names.append(name)
+                except RuntimeError as e:
+                    if 'DB_OPEN' in str(e):
+                        return jsonify({
+                            'success': False,
+                            'message': 'DB_OFFLINE',
+                            'db_state': 'OPEN'
+                        })
+                    raise
+
                 # ── Layer 1+2: retry + circuit breaker on INSERT ──
                 try:
                     supabase_with_retry(
@@ -688,6 +925,11 @@ def mark_attendance():
                 'message': 'DB_ERROR',
                 'db_state': _supabase_breaker.state
             })
+            return jsonify({
+                'success': False,
+                'message': 'DB_ERROR',
+                'db_state': _supabase_breaker.state
+            })
 
     if marked_names:
         return jsonify({'success': True, 'message': f'✅ Marked: {", ".join(marked_names)}'})
@@ -707,6 +949,8 @@ def end_session():
     data = request.get_json()
     subject = data.get('subject', 'general').strip().lower()
     department = data.get('department', 'general').strip().lower()
+    if not _current_user_can_access_class(department, subject):
+        return jsonify({'success': False, 'message': 'Access denied for this department or subject'}), 403
     if not _current_user_can_access_class(department, subject):
         return jsonify({'success': False, 'message': 'Access denied for this department or subject'}), 403
 
@@ -752,6 +996,7 @@ def attendance():
         return render_template('403.html'), 403
 
     data = []
+    for r in _fetch_scoped_attendance('*'):
     for r in _fetch_scoped_attendance('*'):
         data.append((
             r.get('id'), r.get('student_id'), r.get('name'), r.get('department'),
@@ -852,6 +1097,7 @@ def export_csv():
     writer = csv.writer(output)
     writer.writerow(['ID','Student ID','Name','Department','Class','Subject','Date','Time','Status'])
     for r in _fetch_scoped_attendance('*'):
+    for r in _fetch_scoped_attendance('*'):
         writer.writerow([r.get('id'),r.get('student_id'),r.get('name'),r.get('department'),r.get('class'),r.get('subject'),r.get('date'),r.get('time'),r.get('status')])
     output.seek(0)
     from flask import make_response
@@ -870,6 +1116,7 @@ def dashboard():
 
     dept_counts = {}
     subj_counts = {}
+    for r in _fetch_scoped_attendance('department, subject'):
     for r in _fetch_scoped_attendance('department, subject'):
         dept = r.get('department')
         subj = r.get('subject')
@@ -929,8 +1176,25 @@ def delete(id):
     if session.get('role') == 'faculty' and not _record_matches_faculty_scope(record, scope):
         return render_template('403.html'), 403
 
+    existing = supabase_client.table('attendance').select('*').eq('id', id).execute()
+    record = existing.data[0] if existing.data else None
+    if not record:
+        return redirect('/attendance')
+
+    scope = _current_faculty_scope()
+    if session.get('role') == 'faculty' and not _record_matches_faculty_scope(record, scope):
+        return render_template('403.html'), 403
+
     supabase_client.table('attendance').delete().eq('id', id).execute()
     return redirect('/attendance')
+
+
+@app.route('/db_status')
+def db_status():
+    """Returns current circuit breaker state. Requires login."""
+    if not session.get('logged_in'):
+        return jsonify({'state': 'UNKNOWN'}), 401
+    return jsonify({'state': _supabase_breaker.state})
 
 
 @app.route('/db_status')
@@ -943,3 +1207,4 @@ def db_status():
 # ================= RUN =================
 if __name__ == "__main__":
     app.run(debug=True)
+
