@@ -52,8 +52,9 @@ CLASS_CONTEXT_SESSION_KEY = "class_session_context"
 
 
 def normalize_class_context_value(value):
-    value = (value or "general").strip().lower()
-    return value or "general"
+    if not value:
+        return None
+    return str(value).strip().lower() or None
 
 
 def sanitize_text_field(value):
@@ -63,7 +64,7 @@ def sanitize_text_field(value):
     return re.sub(r"\s+", " ", text).strip()
 
 
-def set_class_session_context(subject, department):
+def _set_class_session_context(subject, department):
     context = {
         "subject": normalize_class_context_value(subject),
         "department": normalize_class_context_value(department),
@@ -72,13 +73,8 @@ def set_class_session_context(subject, department):
     session.modified = True
     return context
 
-
-def get_class_session_context(data=None):
-    data = data or {}
-    stored = session.get(CLASS_CONTEXT_SESSION_KEY) or {}
-    subject = data.get("subject") or stored.get("subject") or request.args.get("subject")
-    department = data.get("department") or stored.get("department") or request.args.get("department")
-    return set_class_session_context(subject, department)
+def get_class_session_context():
+    return session.get(CLASS_CONTEXT_SESSION_KEY) or None
 
 
 def _normalize_scope_value(value):
@@ -418,12 +414,14 @@ def class_session():
     if session.get('role') not in ['admin', 'faculty']:
         return render_template('403.html'), 403
     if request.method == 'POST':
-        subject    = request.form.get('subject', 'general').strip().lower()
-        department = request.form.get('department', 'general').strip().lower()
-        if not _current_user_can_access_class(department, subject):
-            return render_template('403.html'), 403
-        set_class_session_context(subject, department)
-        return redirect(f'/camera?subject={subject}&department={department}')
+       subject    = request.form.get('subject', '').strip().lower()
+       department = request.form.get('department', '').strip().lower()
+       if not subject or not department:
+        return render_template('class_session.html', error='Subject and department are required.'), 400
+       if not _current_user_can_access_class(department, subject):
+        return render_template('403.html'), 403
+       _set_class_session_context(subject, department)
+       return redirect(f'/camera?subject={subject}&department={department}')
     return render_template("class_session.html")
 
 # ================= REGISTER =================
@@ -517,11 +515,13 @@ def camera():
     if session.get('role') not in ['admin', 'faculty']:
         return render_template('403.html'), 403
     context = get_class_session_context()
+    if context is None:
+      return redirect('/session')
     if not _current_user_can_access_class(context["department"], context["subject"]):
-        return render_template('403.html'), 403
+       return render_template('403.html'), 403
     return render_template("camera.html",
-                           subject=context["subject"],
-                           department=context["department"])
+                       subject=context["subject"],
+                       department=context["department"])
 
 class CircuitBreaker:
     """
@@ -614,7 +614,9 @@ def mark_attendance():
 
     data       = request.get_json(silent=True) or {}
     image_data = data.get('image', '')
-    context = get_class_session_context(data)
+    context = get_class_session_context()
+    if context is None:
+        return jsonify({'success': False, 'message': 'No active class session. Start a session first.'}), 400
     subject = context["subject"]
     department = context["department"]
     if not _current_user_can_access_class(department, subject):
@@ -730,7 +732,9 @@ def end_session():
         return jsonify({'success': False, 'message': 'Access denied: faculty or admin only'}), 403
 
     data = request.get_json(silent=True) or {}
-    context = get_class_session_context(data)
+    context = get_class_session_context()
+    if context is None:
+      return jsonify({'success': False, 'message': 'No active class session.'}), 400
     subject = context["subject"]
     department = context["department"]
     if not _current_user_can_access_class(department, subject):
