@@ -6,7 +6,14 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 
-def generate_attendance_pdf(supabase_client, subject=None, start_date=None, end_date=None):
+def generate_attendance_pdf(
+    supabase_client,
+    subject=None,
+    start_date=None,
+    end_date=None,
+    department=None,
+    subjects=None,
+):
     """
     Generates a PDF report for attendance.
     If subject is provided, filters by subject.
@@ -16,6 +23,11 @@ def generate_attendance_pdf(supabase_client, subject=None, start_date=None, end_
     
     if subject:
         query = query.ilike('subject', subject)
+    elif subjects:
+        query = query.in_('subject', subjects)
+
+    if department:
+        query = query.ilike('department', department)
         
     if start_date:
         query = query.gte('date', start_date)
