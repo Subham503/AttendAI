@@ -1,8 +1,7 @@
 import sys
 import types
 import unittest
-import os
-from unittest.mock import patch
+
 
 class _Recognizer:
     def read(self, *_args, **_kwargs):
@@ -132,7 +131,7 @@ def _install_import_stubs():
     report_stub.generate_attendance_pdf = lambda *_args, **_kwargs: b"%PDF-1.4"
     sys.modules.setdefault("report_engine", report_stub)
 
-os.environ["SECRET_KEY"] = "test-secret-key"
+
 _install_import_stubs()
 import app as attendance_app
 
