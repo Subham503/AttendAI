@@ -100,6 +100,9 @@ SESSION_TIMEOUT_MINUTES=30
 MAIL_USERNAME=your_email@gmail.com
 MAIL_PASSWORD=your_gmail_app_password
 ```
+- FLASK_DEBUG=true → runs in debug mode (local development only)
+- FLASK_DEBUG=false → runs in production mode (safe default)
+
 
 Notes:
 
