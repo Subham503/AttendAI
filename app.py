@@ -29,8 +29,11 @@ _REG_NO_RE = re.compile(r'^[A-Z0-9][A-Z0-9_-]{1,29}$')
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "smartattend_secret_2024")
+secret_key = os.getenv("SECRET_KEY")
+if not secret_key:
+    raise RuntimeError("SECRET_KEY is required. Set a secret key in .env before starting the app.")
 
+app.secret_key = secret_key
 # Session timeout configuration
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(
     minutes=int(os.getenv("SESSION_TIMEOUT_MINUTES", 30))
@@ -284,16 +287,16 @@ def train_model():
 
     recognizer = cv2.face.LBPHFaceRecognizer_create()
     recognizer.train(faces_data, np.array(labels))
-    
+
     # Save to disk
     recognizer.save("trainer.yml")
     with open("labels.pickle", "wb") as f:
         pickle.dump(label_map, f)
-    
+
     # Update globals
     global_recognizer = recognizer
     global_label_map = label_map
-    
+
     print(f"✅ Trained and saved: {label_counter} student(s), {len(faces_data)} total faces")
     return recognizer, label_map
 
@@ -397,7 +400,7 @@ def logout():
 def retrain():
     if not session.get('logged_in') or session.get('role') != 'admin':
         return "❌ Access Denied: Admin only route."
-    
+
     recognizer, label_map = train_model()
     if recognizer:
         return "✅ Model retrained and saved successfully! <a href='/'>Go Home</a>"
@@ -409,14 +412,14 @@ def student_dashboard():
     if not session.get('logged_in') or session.get('role') != 'student':
         return redirect('/login')
     reg_no = session.get('reg_no')
-    
+
     student_res = supabase_client.table('students').select('id').eq('reg_no', reg_no).execute()
     student_id = student_res.data[0]['id'] if student_res.data else None
-    
+
     if student_id:
         records_res = supabase_client.table('attendance').select('subject, date, time, status').eq('student_id', student_id).order('date', desc=True).order('time', desc=True).execute()
         records = [(r['subject'], r['date'], r['time'], r['status']) for r in (records_res.data or [])]
-        
+
         all_att_res = supabase_client.table('attendance').select('subject').eq('student_id', student_id).execute()
         stats = {}
         for r in (all_att_res.data or []):
@@ -425,7 +428,7 @@ def student_dashboard():
     else:
         records = []
         subject_stats = []
-        
+
     return render_template("student_dashboard.html",
                            name=session.get('name'),
                            reg_no=reg_no,
@@ -679,7 +682,7 @@ def mark_attendance():
         student = global_label_map[label]
         student_id, name, reg_no, dept, cls = student
         now = datetime.now()
-        
+
         try:
             # ── Layer 1+2: retry + circuit breaker on SELECT ──────
             try:
@@ -803,10 +806,10 @@ def attendance():
     data = []
     for r in _fetch_scoped_attendance('*'):
         data.append((
-            r.get('id'), r.get('student_id'), r.get('name'), r.get('department'), 
+            r.get('id'), r.get('student_id'), r.get('name'), r.get('department'),
             r.get('class'), r.get('subject'), r.get('date'), r.get('time'), r.get('status')
         ))
-        
+
     return render_template("attendance.html", data=data)
 
 # ================= SCHEDULER SETUP =================
@@ -817,15 +820,15 @@ def weekly_report_job():
     try:
         res = supabase_client.table('attendance').select('subject').execute()
         subjects = set(r['subject'] for r in (res.data or []) if r.get('subject'))
-        
+
         end_date = datetime.now().date()
         start_date = end_date - timedelta(days=7)
-        
+
         for subj in subjects:
             pdf_bytes = generate_attendance_pdf(
-                supabase_client, 
-                subject=subj, 
-                start_date=str(start_date), 
+                supabase_client,
+                subject=subj,
+                start_date=str(start_date),
                 end_date=str(end_date)
             )
             # TODO: Upload pdf_bytes to Supabase Storage or email to faculty
@@ -845,15 +848,15 @@ atexit.register(lambda: scheduler.shutdown(wait=False))
 def export_pdf():
     if not session.get('logged_in'):
         return redirect('/login')
-        
+
     # Auth check: Only admin and faculty can export PDFs
     if session.get('role') not in ['admin', 'faculty']:
         return "Access Denied: Faculty/Admin only", 403
-        
+
     start_date = request.args.get('start_date', '').strip()
     end_date = request.args.get('end_date', '').strip()
     subject = request.args.get('subject', '').strip().lower()
-    
+
     if not start_date: start_date = None
     if not end_date: end_date = None
     if not subject: subject = None
@@ -868,7 +871,7 @@ def export_pdf():
         subjects = scope["subjects"] or None
         if subject and not _current_user_can_access_class(department, subject):
             return render_template('403.html'), 403
-    
+
     try:
         pdf_bytes = generate_attendance_pdf(
             supabase_client,
@@ -924,10 +927,10 @@ def dashboard():
         subj = r.get('subject')
         dept_counts[dept] = dept_counts.get(dept, 0) + 1
         subj_counts[subj] = subj_counts.get(subj, 0) + 1
-        
+
     dept_data = [(k, v) for k, v in dept_counts.items()]
     subject_data = [(k, v) for k, v in subj_counts.items()]
-    
+
     return render_template("dashboard.html",
                            dept_data=dept_data,
                            subject_data=subject_data)

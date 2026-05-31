@@ -183,9 +183,8 @@ class FacultyScopeTest(unittest.TestCase):
             attendance_app._record_matches_faculty_scope(self.rows[1], scope)
         )
         self.assertFalse(
-            attendance_app._record_matches_faculty_scope(self.rows[2], scope)
+            attendance_app._record_matches_faculty_scope(self.rows[2], scope)                             
         )
-
-
+                                                         
 if __name__ == "__main__":
     unittest.main()
