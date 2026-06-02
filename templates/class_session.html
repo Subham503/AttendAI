@@ -822,7 +822,10 @@
         day: selectedDay,
         time: selectedTime
       });
-      window.location.href = '/camera?' + params.toString();
+      window.location.href = '/camera?' + new URLSearchParams({
+        subject: subj || '',
+        department: 'general'   // ADD THIS FIX
+      });
     }
   </script>
 </body>

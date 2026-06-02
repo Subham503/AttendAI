@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>QR Check-In | AttendAI</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            background: #08111d;
+            color: white;
+            font-family: 'Share Tech Mono', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .card {
+            background: rgba(0, 255, 247, 0.05);
+            border: 1px solid rgba(0, 255, 247, 0.2);
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+            width: 400px;
+        }
+
+        h1 {
+            font-family: 'Orbitron', monospace;
+            color: #00fff7;
+            margin-bottom: 20px;
+        }
+
+        img {
+            width: 260px;
+            height: 260px;
+            background: white;
+            padding: 10px;
+            border-radius: 12px;
+        }
+
+        .timer {
+            margin-top: 15px;
+            color: #00ff88;
+            font-size: 14px;
+        }
+
+        .note {
+            margin-top: 10px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.6);
+        }
+
+        a {
+            display: inline-block;
+            margin-top: 20px;
+            color: #00fff7;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="card">
+    <h1>QR CHECK-IN</h1>
+
+    <img id="qrImage" alt="QR Code">
+
+    <div class="timer" id="timer">
+        Expires in: 10:00
+    </div>
+
+    <div class="note">
+        Students scan this QR to mark attendance
+    </div>
+
+    <a href="/">← Back Home</a>
+</div>
+
+<script>
+    let time = 600;
+    const timer = document.getElementById('timer');
+    const qrImage = document.getElementById("qrImage");
+
+    const subject = "{{ subject }}";
+    const department = "{{ department }}";
+
+    // countdown timer
+    setInterval(() => {
+        const min = Math.floor(time / 60);
+        const sec = time % 60;
+
+        timer.innerText = `Expires in: ${min}:${sec.toString().padStart(2, '0')}`;
+
+        if (time > 0) time--;
+    }, 1000);
+
+    // generate QR ONCE (IMPORTANT FIX)
+    async function loadQR() {
+
+        const formData = new FormData();
+        formData.append("subject", subject);
+        formData.append("department", department);
+
+        const response = await fetch("/generate_qr", {
+            method: "POST",
+            body: formData
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            qrImage.src = URL.createObjectURL(blob);
+        } else {
+            alert("QR generate failed");
+        }
+    }
+
+    loadQR();
+</script>
+
+</body>
+</html>

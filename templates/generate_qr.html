@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Generate QR - AttendAI</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #0b1220;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .card {
+            background: #111a2e;
+            padding: 30px;
+            border-radius: 12px;
+            width: 350px;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(0,0,0,0.4);
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border: none;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #00fff7;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #00cfc7;
+        }
+
+        img {
+            margin-top: 15px;
+            width: 200px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="card">
+    <h2>Generate QR</h2>
+
+    <form id="qrForm">
+        <input type="text" name="subject" placeholder="Enter Subject" required>
+        <input type="text" name="department" placeholder="Enter Department" required>
+        <button type="submit">Generate QR</button>
+    </form>
+
+    <img id="qrImage" />
+</div>
+
+<script>
+document.getElementById("qrForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+
+    let formData = new FormData(this);
+
+    let response = await fetch("/generate_qr", {
+        method: "POST",
+        body: formData
+    });
+
+    if (response.ok) {
+        let blob = await response.blob();
+        let imgUrl = URL.createObjectURL(blob);
+
+        let img = document.getElementById("qrImage");
+        img.src = imgUrl;
+        img.style.display = "block";
+    } else {
+        alert("QR generate nahi hua. Check backend.");
+    }
+});
+</script>
+
+</body>
+</html>

@@ -572,7 +572,6 @@
 
     <!-- Nav grid: row of 3 + row of 2 -->
     <div class="nav-section">
-
       <!-- Row 1 -->
       <div class="nav-row">
         <a href="/register" class="nav-card">
@@ -616,20 +615,55 @@
 
       <!-- Row 2 -->
       <div class="nav-row row-2">
-        <a href="/dashboard" class="nav-card">
+
+        <!-- Generate Attendance -->
+        <a href="/attendance" class="nav-card">
           <div class="card-icon icon-green">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="7" height="7" />
-              <rect x="14" y="3" width="7" height="7" />
-              <rect x="14" y="14" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" />
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
             </svg>
           </div>
-          <div class="card-label">Dashboard</div>
-          <div class="card-desc">Analytics and department stats</div>
+
+          <div class="card-label">Generate Attendance</div>
+
+          <div class="card-desc">
+            View and export attendance records
+          </div>
         </a>
 
-        <a href="/session" class="nav-card">
+        <!-- Camera -->
+        <a href="/camera" class="nav-card">
+          <div class="card-icon icon-pink">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+              <path d="M23 7l-7 5 7 5V7z" />
+              <rect x="1" y="5" width="15" height="14" rx="2" />
+            </svg>
+          </div>
+
+          <div class="card-label">Camera</div>
+
+          <div class="card-desc">
+            Open face recognition camera
+          </div>
+        </a>
+
+        <!-- Start Session -->
+        <a href="/start_session" class="nav-card">
+          <div class="card-icon icon-purple">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+              <rect x="3" y="4" width="18" height="18" rx="2" />
+            </svg>
+          </div>
+
+          <div class="card-label">Start Session</div>
+
+          <div class="card-desc">
+            Create new attendance session
+          </div>
+        </a>
+
+        <!-- Class Session -->
+        <a href="/class_session" class="nav-card">
           <div class="card-icon icon-purple">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -639,13 +673,34 @@
               <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" />
             </svg>
           </div>
-          <div class="card-label">Class Session</div>
-          <div class="card-desc">Set professor, day &amp; time slot</div>
-        </a>
-      </div>
 
+          <div class="card-label">Class Session</div>
+
+          <div class="card-desc">Set professor, day & time slot</div>
+        </a>
+
+        <!-- Generate QR -->
+        <a href="/generate_qr" class="nav-card">
+          <div class="card-icon icon-cyan">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 3h6v6H3z" />
+              <path d="M15 3h6v6h-6z" />
+              <path d="M3 15h6v6H3z" />
+              <path d="M15 15h2v2h-2z" />
+              <path d="M19 15h2v6h-6v-2" />
+            </svg>
+          </div>
+
+          <div class="card-label">Generate QR</div>
+
+          <div class="card-desc">
+            Create QR code for student self attendance
+          </div>
+        </a>
+
+      </div>
     </div>
-  </div>
+   </div> <!-- END container -->
 
   <div class="bottom-bar">AttendAI.0 &nbsp;·&nbsp; AI ATTENDANCE SYSTEM &nbsp;·&nbsp; POWERED BY OPENCV</div>
 </body>

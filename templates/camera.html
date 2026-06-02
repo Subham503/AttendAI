@@ -229,7 +229,7 @@
       transform: scaleX(-1);
     }
 
-    video.camera-feed {
+    video.camera {
       background: #000;
     }
 
@@ -481,6 +481,12 @@
     .finger-count-display.match {
       color: var(--neon-green);
       text-shadow: 0 0 20px rgba(0, 255, 100, 0.5);
+    }
+
+    .camera-feed {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
 
     /* Confirmed badge */
@@ -790,6 +796,13 @@
       cursor: not-allowed;
     }
 
+
+    .qr-btn {
+      background: rgba(0, 255, 247, 0.08);
+      border: 1px solid rgba(0, 255, 247, 0.5);
+      color: var(--neon-cyan);
+    }
+
     .start-btn svg {
       width: 15px;
       height: 15px;
@@ -1010,11 +1023,12 @@
     </div>
 
     <div class="main-layout">
-      <!-- Camera -->
       <div class="camera-panel">
-        <video id="videoFeed" class="camera-feed" autoplay playsinline muted></video>
 
-        <!-- Step 1: Blink overlay -->
+        <!-- CAMERA VIDEO (ONLY ONE VIDEO TAG) -->
+        <video id="video" class="camera-feed" autoplay playsinline muted></video>
+
+        <!-- OVERLAYS -->
         <div class="liveness-overlay" id="livenessOverlay">
           <div class="liveness-icon">👁️</div>
           <div class="liveness-text">Step 1: Blink to Verify</div>
@@ -1103,6 +1117,19 @@
           </div>
         </div>
 
+        <button class="start-btn" id="qrBtn" onclick="generateQR()">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M7 7h3v3H7z" />
+            <path d="M14 7h3v3h-3z" />
+            <path d="M7 14h3v3H7z" />
+            <path d="M14 14h1" />
+            <path d="M17 14v1" />
+            <path d="M14 17h3" />
+          </svg>
+          Generate QR
+        </button>
+
         <!-- Buttons -->
         <button class="start-btn" id="startBtn" onclick="startScanning()" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1131,314 +1158,461 @@
       </div>
     </div>
   </div>
-
+  <script src="/static/camera.js"></script>
   <canvas id="captureCanvas"></canvas>
   <div class="toast" id="toast"></div>
 
-  <!-- MediaPipe: Face Mesh + Hands + Camera Utils -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-
-  <script>
-    // ── Elements ──────────────────────────────────────────────────
-    const video = document.getElementById('videoFeed');
-    const canvas = document.getElementById('captureCanvas');
-    const camStatusText = document.getElementById('camStatusText');
-    const toast = document.getElementById('toast');
-    const flash = document.getElementById('flash');
-    const scanLine = document.getElementById('scanLine');
-    const livenessOverlay = document.getElementById('livenessOverlay');
-    const gestureOverlay = document.getElementById('gestureOverlay');
-    const confirmedBadge = document.getElementById('confirmedBadge');
-    const nameOverlay = document.getElementById('nameOverlay');
-    const scanPulse = document.getElementById('scanPulse');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const markedList = document.getElementById('markedList');
-    const markedCount = document.getElementById('markedCount');
-    const markedCountHdr = document.getElementById('markedCountHeader');
-    const scanCount = document.getElementById('scanCount');
-    const earBar = document.getElementById('earBar');
-    const challengeNum = document.getElementById('challengeNum');
-    const fingerDisplay = document.getElementById('fingerDisplay');
-    const fingerBar = document.getElementById('fingerBar');
-
-    // ── State ─────────────────────────────────────────────────────
-    const LEFT_EYE = [362, 385, 387, 263, 373, 380];
-    const RIGHT_EYE = [33, 160, 158, 133, 153, 144];
-    const EAR_THRESHOLD = 0.20;
-    const CONSEC_FRAMES = 2;
-    const SCAN_INTERVAL = 3000;
-    const FINGER_HOLD_FRAMES = 8; // frames finger count must match
-
-    let blinkVerified = false;
-    let gestureVerified = false;
-    let eyeClosedFrames = 0;
-    let challengeNumber = 0;
-    let fingerMatchFrames = 0;
-    let scanning = false;
-    let scanTimer = null;
-    let totalMarked = 0;
-    let totalScans = 0;
-
-    // ── EAR helpers ───────────────────────────────────────────────
-    function dist(p1, p2) { return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2); }
-    function calcEAR(lm, idx) {
-      const [p1, p2, p3, p4, p5, p6] = idx.map(i => lm[i]);
-      return (dist(p2, p6) + dist(p3, p5)) / (2.0 * dist(p1, p4));
-    }
-
-    // ── Finger count ──────────────────────────────────────────────
-    function countFingers(landmarks) {
-      let count = 0;
-      // Index, Middle, Ring, Pinky: tip y < pip y = extended
-      if (landmarks[8].y < landmarks[6].y) count++; // index
-      if (landmarks[12].y < landmarks[10].y) count++; // middle
-      if (landmarks[16].y < landmarks[14].y) count++; // ring
-      if (landmarks[20].y < landmarks[18].y) count++; // pinky
-      // Thumb: tip x > ip x (mirrored video)
-      if (landmarks[4].x > landmarks[3].x) count++; // thumb
-      return count;
-    }
-
-    // ── MediaPipe Face Mesh (blink detection) ─────────────────────
-    const faceMesh = new FaceMesh({
-      locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
-    });
-    faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-    faceMesh.onResults(results => {
-      if (blinkVerified) return;
-      if (!results.multiFaceLandmarks?.length) { earBar.style.width = '0%'; return; }
-      const lm = results.multiFaceLandmarks[0];
-      const avgEAR = (calcEAR(lm, LEFT_EYE) + calcEAR(lm, RIGHT_EYE)) / 2;
-      earBar.style.width = Math.min(100, (avgEAR / 0.35) * 100) + '%';
-      earBar.style.background = avgEAR < EAR_THRESHOLD ? '#ff4455' : 'var(--neon-cyan)';
-      if (avgEAR < EAR_THRESHOLD) { eyeClosedFrames++; }
-      else { if (eyeClosedFrames >= CONSEC_FRAMES) confirmBlink(); eyeClosedFrames = 0; }
-    });
-
-    // ── MediaPipe Hands (finger count) ───────────────────────────
-    const hands = new Hands({
-      locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
-    });
-    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.5 });
-    hands.onResults(results => {
-      if (!blinkVerified || gestureVerified) return;
-      if (!results.multiHandLandmarks?.length) {
-        fingerDisplay.textContent = '0';
-        fingerDisplay.classList.remove('match');
-        fingerBar.style.width = '0%';
-        fingerBar.style.background = 'var(--neon-amber)';
-        fingerMatchFrames = 0;
-        return;
-      }
-      const lm = results.multiHandLandmarks[0];
-      const count = countFingers(lm);
-      fingerDisplay.textContent = count;
-      const barPct = (count / 5) * 100;
-      fingerBar.style.width = barPct + '%';
-
-      if (count === challengeNumber) {
-        fingerDisplay.classList.add('match');
-        fingerBar.style.background = 'var(--neon-green)';
-        fingerMatchFrames++;
-        if (fingerMatchFrames >= FINGER_HOLD_FRAMES) confirmGesture();
-      } else {
-        fingerDisplay.classList.remove('match');
-        fingerBar.style.background = 'var(--neon-amber)';
-        fingerMatchFrames = 0;
-      }
-    });
-
-    // ── Step confirmations ────────────────────────────────────────
-    function confirmBlink() {
-      blinkVerified = true;
-      livenessOverlay.classList.add('hidden');
-
-      // Generate random challenge
-      challengeNumber = Math.floor(Math.random() * 5) + 1;
-      challengeNum.textContent = challengeNumber;
-
-      // Show gesture overlay
-      gestureOverlay.classList.add('show');
-      camStatusText.textContent = 'SHOW FINGERS';
-
-      // Update step indicators
-      setStep(1, 'done');
-      setStep(2, 'active');
-
-      showToast('✅ Blink verified! Now show ' + challengeNumber + ' finger(s).', false);
-    }
-
-    function confirmGesture() {
-      gestureVerified = true;
-      gestureOverlay.classList.remove('show');
-      confirmedBadge.classList.add('show');
-
-      // Update step indicators
-      setStep(2, 'done');
-      setStep(3, 'active');
-
-      startBtn.disabled = false;
-      camStatusText.textContent = 'READY';
-      showToast('✅ Gesture verified! Press Start Scanning.', false);
-    }
-
-    function resetVerification() {
-      blinkVerified = false;
-      gestureVerified = false;
-      eyeClosedFrames = 0;
-      fingerMatchFrames = 0;
-      livenessOverlay.classList.remove('hidden');
-      gestureOverlay.classList.remove('show');
-      confirmedBadge.classList.remove('show');
-      setStep(1, 'active');
-      setStep(2, '');
-      setStep(3, '');
-      startBtn.disabled = true;
-      camStatusText.textContent = 'BLINK NOW';
-    }
-
-    function setStep(n, state) {
-      const icon = document.getElementById('step' + n + 'Icon');
-      const label = document.getElementById('step' + n + 'Label');
-      icon.className = 'step-icon' + (state ? ' ' + state : '');
-      label.className = 'step-label' + (state ? ' ' + state : '');
-    }
-
-    // ── Camera init + MediaPipe loop ──────────────────────────────
-    async function initCamera() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
-        });
-        video.srcObject = stream;
-        video.onloadedmetadata = () => {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          camStatusText.textContent = 'BLINK NOW';
-          setStep(1, 'active');
-        };
-
-        const mpCam = new Camera(video, {
-          onFrame: async () => {
-            if (!blinkVerified) {
-              await faceMesh.send({ image: video });
-            } else if (!gestureVerified) {
-              await hands.send({ image: video });
-            }
-          },
-          width: 1280, height: 720
-        });
-        mpCam.start();
-      } catch (err) {
-        camStatusText.textContent = 'ERROR';
-        showToast('Camera access denied.', true);
-      }
-    }
-
-    // ── Scanning ──────────────────────────────────────────────────
-    function startScanning() {
-      const subject = document.getElementById('subjectInput').value.trim() || 'General';
-      const dept = document.getElementById('deptInput').value.trim() || 'General';
-      if (!subject || !dept) { showToast('Fill subject and department first.', true); return; }
-
-      scanning = true;
-      startBtn.style.display = 'none';
-      stopBtn.style.display = 'flex';
-      scanLine.classList.add('active');
-      scanPulse.classList.add('active');
-      camStatusText.textContent = 'SCANNING';
-      setStep(3, 'active');
-      showToast('🔍 Auto-scanning started. Students step in!', false);
-      autoScan();
-      scanTimer = setInterval(autoScan, SCAN_INTERVAL);
-    }
-
-    function stopScanning() {
-      scanning = false;
-      clearInterval(scanTimer);
-      scanTimer = null;
-      startBtn.style.display = 'flex';
-      stopBtn.style.display = 'none';
-      scanLine.classList.remove('active');
-      scanPulse.classList.remove('active');
-      camStatusText.textContent = 'STOPPED';
-      showToast(`Session ended. ${totalMarked} student(s) marked.`, false);
-    }
-
-    async function autoScan() {
-      if (!scanning) return;
-      const subject = document.getElementById('subjectInput').value.trim() || 'General';
-      const dept = document.getElementById('deptInput').value.trim() || 'General';
-
-      const ctx = canvas.getContext('2d');
-      ctx.save(); ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height); ctx.restore();
-      const imageData = canvas.toDataURL('image/jpeg', 0.85);
-
-      flash.classList.add('active');
-      setTimeout(() => flash.classList.remove('active'), 100);
-
-      totalScans++;
-      scanCount.textContent = totalScans;
-
-      try {
-        const res = await fetch('/mark_attendance', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: imageData, subject, department: dept })
-        });
-        const result = await res.json();
-        const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-
-        if (result.success) {
-          const name = result.message.replace('✅ Marked: ', '');
-          addToLog(name, time, 'marked');
-          showNameOverlay('✅ ' + name);
-          totalMarked++;
-          markedCount.textContent = totalMarked;
-          markedCountHdr.textContent = totalMarked + ' marked';
-        } else if (result.message.includes('Already marked')) {
-          const name = result.message.replace('⚠️ Already marked today: ', '');
-          addToLog(name, time, 'skipped');
-          showNameOverlay('⚠️ ' + name);
-        } else if (result.message.includes('No face')) {
-          // silent
-        } else {
-          addToLog('Unknown', time, 'unknown');
-        }
-      } catch (err) { console.error('Scan error:', err); }
-    }
-
-    // ── UI helpers ────────────────────────────────────────────────
-    function addToLog(name, time, type) {
-      const empty = markedList.querySelector('.empty-list');
-      if (empty) empty.remove();
-      const item = document.createElement('div');
-      item.className = 'marked-item' + (type === 'skipped' ? ' skipped' : type === 'unknown' ? ' unknown' : '');
-      item.innerHTML = `
-      <div class="marked-dot${type === 'skipped' ? ' skipped' : type === 'unknown' ? ' unknown' : ''}"></div>
-      <div class="marked-name">${name}</div>
-      <div class="marked-time">${time}</div>`;
-      markedList.prepend(item);
-    }
-
-    function showNameOverlay(text) {
-      nameOverlay.textContent = text;
-      nameOverlay.classList.add('show');
-      setTimeout(() => nameOverlay.classList.remove('show'), 2000);
-    }
-
-    function showToast(msg, isError = false) {
-      toast.textContent = msg;
-      toast.className = 'toast' + (isError ? ' error' : '');
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 3500);
-    }
-
-    initCamera();
-  </script>
 </body>
 
-</html>
+<!-- QR Modal -->
+<div id="qrModal" style="
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.8);
+  z-index:9999;
+  justify-content:center;
+  align-items:center;
+  ">
+
+  <div style="
+    background:#08121f;
+    padding:30px;
+    border-radius:20px;
+    border:1px solid rgba(0,255,247,0.3);
+    text-align:center;
+">
+
+    <h2 style="
+      color:#00fff7;
+      font-family:Orbitron;
+      margin-bottom:20px;
+    ">
+      Student Check-In QR
+    </h2>
+
+    <img id="qrImage" style="
+        width:300px;
+        height:300px;
+        border-radius:12px;
+        background:white;
+        padding:10px;
+      ">
+
+    <p style="
+        color:rgba(255,255,255,0.5);
+        margin-top:10px;
+        font-size:12px;
+        font-family:'Share Tech Mono';
+        letter-spacing:1px;
+      ">
+      Students can scan this QR using their mobile browser after login
+    </p>
+
+    <div id="qrTimer" style="
+        color:#00fff7;
+        margin-top:15px;
+        font-family:'Share Tech Mono';
+        letter-spacing:2px;
+      ">
+      Expires in: 10:00
+    </div>
+
+    <br><br>
+    <button onclick="closeQRModal()" class="start-btn qr-btn" style="display:inline-flex;">
+      Close
+    </button>
+
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+  window.Module = {};
+</script>
+
+<!-- MediaPipe: Face Mesh + Hands + Camera Utils -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+
+<script src="{{ url_for('static', filename='camera.js') }}"></script>
+
+
+</body>
+<script>
+  // ── ELEMENTS ──
+  const camStatusText = document.getElementById('camStatusText');
+  const toastEl = document.getElementById('toast');
+  const livenessOverlay = document.getElementById('livenessOverlay');
+  const gestureOverlay = document.getElementById('gestureOverlay');
+  const confirmedBadge = document.getElementById('confirmedBadge');
+  const nameOverlay = document.getElementById('nameOverlay');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const earBar = document.getElementById('earBar');
+  const challengeNum = document.getElementById('challengeNum');
+  const fingerDisplay = document.getElementById('fingerDisplay');
+  const markedList = document.getElementById('markedList');
+  const markedCount = document.getElementById('markedCount');
+  const markedCountHeader = document.getElementById('markedCountHeader');
+  // ── STATE ── 
+  const LEFT_EYE = [362, 385, 387, 263, 373, 380];
+  const RIGHT_EYE = [33, 160, 158, 133, 153, 144];
+  const EAR_THRESHOLD = 0.22;
+  const CONSEC_FRAMES = 3;
+  const FINGER_HOLD_FRAMES = 8;
+  const SCAN_INTERVAL = 3000;
+
+  let mpCamera = null;
+  let scanning = false;
+  let scanCounter = 0;
+  let scanTimer = null;
+  let markedCounter = 0;
+  // ── STATE ──
+  // ==================== STATE ====================
+
+  let blinkVerified = false;
+  let gestureVerified = false;
+
+  let eyeClosedFrames = 0;
+  let fingerMatchFrames = 0;
+  let challengeNumber = 0;
+  let camera = null;
+
+  // ==================== STEP FUNCTION ====================
+
+  function setStep(n, state) {
+    const icon = document.getElementById(`step${n}Icon`);
+    const label = document.getElementById(`step${n}Label`);
+
+    if (icon) icon.className = `step-icon ${state}`;
+    if (label) label.className = `step-label ${state}`;
+  }
+
+  // ==================== CAMERA ====================
+
+  window.addEventListener("load", async () => {
+    const video = document.getElementById("video");
+
+    if (!video) {
+      console.error("Video element not found");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      });
+
+      video.srcObject = stream;
+
+      video.onloadedmetadata = async () => {
+        try {
+          await video.play();
+        } catch (e) {
+          console.warn("Autoplay blocked");
+        }
+
+        startMediaPipe(video);
+      };
+
+    } catch (err) {
+      console.error("Camera error:", err);
+    }
+  });
+
+  // ==================== MEDIAPIPE ====================
+
+  function startMediaPipe(video) {
+
+    if (!video) return;
+
+    camera = new Camera(video, {
+      onFrame: async () => {
+        await faceMesh.send({ image: video });
+        await hands.send({ image: video });
+      },
+      width: 640,
+      height: 480
+    });
+
+    camera.start();
+  }
+
+  // ==================== HELPERS ====================
+
+  function dist(a, b) {
+    return Math.sqrt(
+      (a.x - b.x) ** 2 +
+      (a.y - b.y) ** 2
+    );
+  }
+
+  function showToast(msg, err = false) {
+
+    const el = document.getElementById("toast");
+
+    if (!el) return;
+
+    el.textContent = msg;
+
+    el.className = err
+      ? "toast show error"
+      : "toast show";
+
+    setTimeout(() => {
+      el.classList.remove("show");
+    }, 2500);
+  }
+
+  function calcEAR(lm, idx) {
+    const [p1, p2, p3, p4, p5, p6] =
+      idx.map(i => lm[i]);
+
+    return (
+      (dist(p2, p6) + dist(p3, p5)) /
+      (2 * dist(p1, p4))
+    );
+  }
+
+  function countFingers(lm) {
+
+    let count = 0;
+
+    if (lm[8].y < lm[6].y) count++;
+    if (lm[12].y < lm[10].y) count++;
+    if (lm[16].y < lm[14].y) count++;
+    if (lm[20].y < lm[18].y) count++;
+
+    const isRight = lm[4].x > lm[17].x;
+
+    if (isRight) {
+      if (lm[4].x > lm[3].x) count++;
+    } else {
+      if (lm[4].x < lm[3].x) count++;
+    }
+
+    return count;
+  }
+
+  // ==================== FACE MESH ====================
+
+  const faceMesh = new FaceMesh({
+    locateFile: f =>
+      `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
+  });
+
+  faceMesh.setOptions({
+    maxNumFaces: 1,
+    refineLandmarks: true,
+    minDetectionConfidence: 0.8,
+    minTrackingConfidence: 0.8
+  });
+
+  faceMesh.onResults((results) => {
+
+    if (!results.multiFaceLandmarks?.length) return;
+
+    const lm = results.multiFaceLandmarks[0];
+
+    const ear =
+      (calcEAR(lm, LEFT_EYE) +
+        calcEAR(lm, RIGHT_EYE)) / 2;
+
+        console.log("EAR:", ear);
+
+    if (ear < EAR_THRESHOLD) {
+
+      eyeClosedFrames++;
+
+    } else {
+
+      if (
+        eyeClosedFrames >= CONSEC_FRAMES &&
+        !blinkVerified
+      ) {
+
+        blinkVerified = true;
+
+        challengeNumber =
+          Math.floor(Math.random() * 5) + 1;
+
+        const fingerText =
+          challengeNumber === 1
+            ? "finger"
+            : "fingers";
+
+        document
+          .getElementById("gestureOverlay")
+          ?.classList.add("show");
+
+        const status =
+          document.getElementById("camStatusText");
+
+        if (status) {
+          status.textContent =
+            `Show ${challengeNumber} ${fingerText}`;
+        }
+
+        setStep(1, "done");
+        setStep(2, "active");
+
+        showToast(
+          `Blink verified! Show ${challengeNumber} ${fingerText}`
+        );
+      }
+
+      eyeClosedFrames = 0;
+    }
+  });
+
+  // ==================== HANDS ====================
+
+  const hands = new Hands({
+    locateFile: f =>
+      `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+  });
+
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.5
+  });
+
+  hands.onResults((results) => {
+
+    if (!results.multiHandLandmarks?.length) return;
+
+    const lm = results.multiHandLandmarks[0];
+
+    const count = countFingers(lm);
+
+    const fingerDisplay =
+      document.getElementById("fingerDisplay");
+
+    if (fingerDisplay) {
+      fingerDisplay.textContent = count;
+    }
+
+    if (
+      blinkVerified &&
+      count === challengeNumber
+    ) {
+
+      fingerMatchFrames++;
+
+      if (
+        fingerMatchFrames >= 8 &&
+        !gestureVerified
+      ) {
+
+        gestureVerified = true;
+
+        document
+          .getElementById("gestureOverlay")
+          ?.classList.remove("show");
+
+        document
+          .getElementById("confirmedBadge")
+          ?.classList.add("show");
+
+        setStep(2, "done");
+        setStep(3, "done");
+
+        showToast("Verification Successful");
+      }
+
+    } else {
+
+      fingerMatchFrames = 0;
+    }
+  });
+
+  // ==================== START SCANNING ====================
+
+  window.startScanning = function () {
+
+    if (!gestureVerified) {
+      showToast(
+        "Complete verification first!",
+        true
+      );
+      return;
+    }
+
+    const startBtn =
+      document.getElementById("startBtn");
+
+    const stopBtn =
+      document.getElementById("stopBtn");
+
+    const status =
+      document.getElementById("camStatusText");
+
+    if (startBtn) startBtn.style.display = "none";
+    if (stopBtn) stopBtn.style.display = "flex";
+
+    if (status) {
+      status.textContent = "SCANNING";
+    }
+
+    showToast("Attendance Scanning Started");
+  };
+
+  // ==================== QR ====================
+
+  window.generateQR = function () {
+
+    const modal =
+      document.getElementById("qrModal");
+
+    const img =
+      document.getElementById("qrImage");
+
+    if (!modal || !img) return;
+
+    img.src =
+      `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=SmartAttend-${Date.now()}`;
+
+    modal.style.display = "flex";
+
+    let time = 600;
+
+    const timer = setInterval(() => {
+
+      time--;
+
+      const timerEl =
+        document.getElementById("qrTimer");
+
+      if (timerEl) {
+        timerEl.textContent =
+          `Expires in: ${Math.floor(time / 60)}:${String(time % 60).padStart(2, "0")}`;
+      }
+
+      if (time <= 0) {
+        clearInterval(timer);
+        modal.style.display = "none";
+      }
+
+    }, 1000);
+  };
+
+  window.closeQRModal = function () {
+
+    const modal =
+      document.getElementById("qrModal");
+
+    if (modal) {
+      modal.style.display = "none";
+    }
+  };
+</script>

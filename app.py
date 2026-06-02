@@ -1,17 +1,29 @@
-from flask import Flask, render_template, request, redirect, Response, jsonify, session
+from flask import Flask, render_template, request, redirect, Response, jsonify, session, make_response, send_file
+from PIL import Image
 import cv2
+from datetime import datetime, timedelta
 from alerts import init_mail, send_low_attendance_alert
-from datetime import datetime
 from supabase import create_client
-import os
+import os 
+import io
+import base64
+import uuid
+import qrcode
+import time
+import json
+import atexit
 import re
 import numpy as np
 import bcrypt
 import pickle
 from pathlib import Path
 from dotenv import load_dotenv
+
+from apscheduler.schedulers.background import BackgroundScheduler
+from report_engine import generate_attendance_pdf
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from liveness import verify_liveness
 
 # Reg-no must be purely alphanumeric with optional hyphens/underscores,
 # 2-30 characters. Rejects any path traversal sequence (dots, slashes, etc.).
@@ -38,8 +50,31 @@ supabase_client = create_client(
     os.getenv("SUPABASE_KEY")
 )
 
-current_subject = "general"
-current_department = "general"
+from flask import Flask, render_template, request, jsonify, redirect, session
+
+app = Flask(__name__)
+app.secret_key = "test"
+
+
+@app.route("/test")
+def test():
+    return "Flask is working"
+
+
+@app.route('/start_session', methods=['GET', 'POST'])
+def start_session():
+    if request.method == 'POST':
+        subject = request.form.get("subject")
+        department = request.form.get("department")
+
+        session['subject'] = subject
+        session['department'] = department
+
+        return redirect('/generate_qr')
+
+    return render_template('start_session.html')
+# ================= QR SESSION STORE =================
+qr_sessions = {}
 
 # Global model and label map for efficiency
 global_recognizer = cv2.face.LBPHFaceRecognizer_create()
@@ -107,7 +142,12 @@ def train_model():
             if len(detected) == 0:
                 continue
             x, y, w, h = detected[0]
-            face_roi = cv2.resize(gray[y:y+h, x:x+w], (200, 200))
+            faces = face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=5,
+                minSize=(80, 80)
+            )
             faces_data.append(face_roi)
             labels.append(label_counter)
             added += 1
@@ -164,17 +204,20 @@ def login():
     role     = data.get('role', 'admin')
 
     if role == 'admin':
-        if username == 'admin' and password == 'admin123':
-          session['logged_in'] = True
-          session['role'] = 'admin'
-          session['name'] = username
-          return jsonify({'success': True, 'redirect': '/'})
+        result = supabase_client.table('admins').select('password').eq('username', username).execute()
+        user = result.data[0] if result.data else None
+        if username == "admin" and password == "admin123":
+            session['logged_in'] = True
+            session['role']      = 'admin'
+            session['name']      = username
+            return jsonify({'success': True, 'redirect': '/'})
+        return jsonify({'success': False, 'message': 'Invalid admin credentials.'})
 
-          return jsonify({'success': False, 'message': 'Invalid admin credentials.'})
     elif role == 'faculty':
         result = supabase_client.table('faculty').select('password, name').eq('faculty_id', username).execute()
         user = result.data[0] if result.data else None
         if user and bcrypt.checkpw(password.encode(), user['password'].encode()):
+
             session['logged_in'] = True
             session['role']      = 'faculty'
             session['name']      = user['name'] if user['name'] else username
@@ -248,16 +291,23 @@ def student_dashboard():
                            subject_stats=subject_stats)
 
 # ================= CLASS SESSION =================
-@app.route('/session', methods=['GET', 'POST'])
+@app.route('/class_session', methods=['GET', 'POST'])
 def class_session():
     if not session.get('logged_in'):
         return redirect('/login')
+
     if session.get('role') not in ['admin', 'faculty']:
         return render_template('403.html'), 403
+
     if request.method == 'POST':
-        subject    = request.form.get('subject', 'general').strip().lower()
-        department = request.form.get('department', 'general').strip().lower()
+        subject = request.form.get('subject')
+        department = request.form.get('department')
+
+        if not subject or not department:
+            return "Missing data", 400
+
         return redirect(f'/camera?subject={subject}&department={department}')
+
     return render_template("class_session.html")
 
 # ================= REGISTER =================
@@ -343,19 +393,136 @@ def register():
 
     return jsonify({'success': True, 'message': f'Enrolled {name} with {saved} face photos.'})
 
-# ================= CAMERA PAGE =================
-@app.route('/camera')
-def camera():
-    global current_subject, current_department
+
+# ================= QR PAGE =================
+@app.route('/qr_page')
+def qr_page():
+
     if not session.get('logged_in'):
         return redirect('/login')
+
     if session.get('role') not in ['admin', 'faculty']:
         return render_template('403.html'), 403
-    current_subject    = request.args.get('subject', 'general').strip().lower()
-    current_department = request.args.get('department', 'general').strip().lower()
+
+    subject = request.args.get('subject', 'general')
+    department = request.args.get('department', 'general')
+
+    return render_template(
+        'qr_page.html',
+        subject=subject,
+        department=department
+    )
+
+active_qr = {}
+# ================= GENERATE QR =================
+@app.route('/generate_qr', methods=['GET', 'POST'])
+def generate_qr():
+
+    if not session.get('logged_in'):
+        return redirect('/login')
+
+    if session.get('role') not in ['admin', 'faculty']:
+        return render_template('403.html'), 403
+
+    if request.method == 'POST':
+
+        subject = request.form.get('subject', 'general').strip().lower()
+        department = request.form.get('department', 'general').strip().lower()
+
+        token = str(uuid.uuid4())
+
+        qr_sessions[token] = {
+            'subject': subject,
+            'department': department,
+            'expires_at': datetime.now() + timedelta(minutes=10),
+            'used_students': []
+        }
+
+
+        qr_url = f"http://10.177.33.252:8000/checkin/{token}"
+        img = qrcode.make(qr_url)
+
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+
+        return send_file(buffer, mimetype='Aditi.png')
+
+    return render_template('generate_qr.html')
+
+# ================= CAMERA PAGE =================
+
+@app.route('/camera')
+def camera():
+    if not session.get('logged_in'):
+        return redirect('/login')
+
+    if session.get('role') not in ['admin', 'faculty']:
+        return render_template('403.html'), 403
+
+    current_subject = request.args.get('subject', 'general')
+    current_department = request.args.get('department', 'general')
+
+    if not current_subject:
+        current_subject = 'general'
+    if not current_department:
+        current_department = 'general'
+
     return render_template("camera.html",
-                           subject=current_subject,
-                           department=current_department)
+                         subject=current_subject,
+                         department=current_department)
+
+# ================= QR CHECKIN =================
+
+@app.route('/checkin/<token>')
+def checkin(token):
+
+    if not session.get('logged_in'):
+        return redirect('/login')
+
+    if session.get('role') != 'student':
+        return "Only students can check in", 403
+
+    qr_session = qr_sessions.get(token)
+
+    # ❌ FIX 1: token missing check
+    if not qr_session:
+        return "Invalid QR Code (token not found)", 400
+
+    # ❌ FIX 2: expiry check
+    if datetime.now() > qr_session['expires_at']:
+        return "QR Code Expired", 400
+
+    reg_no = session.get('reg_no')
+
+    if reg_no in qr_session['used_students']:
+        return "Already marked", 400
+
+    student_res = supabase_client.table('students') \
+        .select('id, name, department, class') \
+        .eq('reg_no', reg_no).execute()
+
+    if not student_res.data:
+        return "Student not found", 404
+
+    student = student_res.data[0]
+
+    today = str(datetime.now().date())
+
+    supabase_client.table('attendance').insert({
+        'student_id': student['id'],
+        'name': student['name'],
+        'department': student['department'],
+        'class': student['class'],
+        'subject': qr_session['subject'],
+        'date': today,
+        'time': str(datetime.now().time()),
+        'status': 'Present'
+    }).execute()
+
+    qr_session['used_students'].append(reg_no)
+
+    return "✅ Attendance marked successfully!"
 
 # ================= MARK ATTENDANCE =================
 @app.route('/mark_attendance', methods=['POST'])
@@ -383,6 +550,10 @@ def mark_attendance():
     if frame is None:
         return jsonify({'success': False, 'message': 'Invalid image received'})
 
+    # --- Server-Side Liveness Verification ---
+    if not verify_liveness(frame):
+        return jsonify({'success': False, 'message': 'Liveness check failed. Spoofing detected or no clear face.'})
+
     face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
     gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray, 1.3, 5)
@@ -390,7 +561,7 @@ def mark_attendance():
     if len(faces) == 0:
         return jsonify({'success': False, 'message': 'No face detected. Position face clearly.'})
 
-    CONFIDENCE_THRESHOLD = 60
+    CONFIDENCE_THRESHOLD = 40-70
     marked_names  = []
     skipped_names = []
 
@@ -430,6 +601,51 @@ def mark_attendance():
         return jsonify({'success': False, 'message': f'⚠️ Already marked today: {", ".join(skipped_names)}'})
     else:
         return jsonify({'success': False, 'message': 'Face detected but not recognized. Re-register in better lighting.'})
+    
+# ================= END SESSION =================
+@app.route('/end_session', methods=['POST'])
+def end_session():
+    if not session.get('logged_in'):
+        return jsonify({'success': False, 'message': 'Not logged in'}), 401
+    if session.get('role') not in ['admin', 'faculty']:
+        return jsonify({'success': False, 'message': 'Access denied: faculty or admin only'}), 403
+
+    data = request.get_json()
+    subject = data.get('subject', 'general').strip().lower()
+    department = data.get('department', 'general').strip().lower()
+
+    now = datetime.now()
+    date_str = str(now.date())
+    time_str = str(now.time())
+
+    try:
+        students_res = supabase_client.table('students').select('id, name, department, class').eq('department', department).execute()
+        all_students = students_res.data or []
+
+        attendance_res = supabase_client.table('attendance').select('student_id').eq('subject', subject).eq('date', date_str).execute()
+        present_student_ids = {record['student_id'] for record in (attendance_res.data or [])}
+
+        absent_records = []
+        for student in all_students:
+            if student['id'] not in present_student_ids:
+                absent_records.append({
+                    'student_id': student['id'],
+                    'name': student['name'],
+                    'department': student['department'],
+                    'class': student['class'],
+                    'subject': subject,
+                    'date': date_str,
+                    'time': time_str,
+                    'status': 'Absent'
+                })
+
+        if absent_records:
+            supabase_client.table('attendance').insert(absent_records).execute()
+
+        return jsonify({'success': True, 'message': f'Marked {len(absent_records)} absent.'})
+    except Exception as e:
+        print(f"DB ERROR in end_session: {e}")
+        return jsonify({'success': False, 'message': 'Error marking absentees.'}), 500
 
 # ================= ATTENDANCE =================
 @app.route('/attendance')
@@ -448,6 +664,68 @@ def attendance():
         ))
         
     return render_template("attendance.html", data=data)
+
+# ================= SCHEDULER SETUP =================
+scheduler = BackgroundScheduler()
+
+def weekly_report_job():
+    print("Running weekly PDF report generation...")
+    try:
+        res = supabase_client.table('attendance').select('subject').execute()
+        subjects = set(r['subject'] for r in (res.data or []) if r.get('subject'))
+        
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=7)
+        
+        for subj in subjects:
+            pdf_bytes = generate_attendance_pdf(
+                supabase_client, 
+                subject=subj, 
+                start_date=str(start_date), 
+                end_date=str(end_date)
+            )
+            # TODO: Upload pdf_bytes to Supabase Storage or email to faculty
+            # to avoid local disk bloat as requested in PR review.
+            pass
+        print("Weekly reports generated (stateless mode).")
+    except Exception as e:
+        print(f"Error in weekly report job: {e}")
+
+# Run every Friday at 17:00 (5 PM)
+scheduler.add_job(func=weekly_report_job, trigger="cron", day_of_week='fri', hour=17, minute=0)
+scheduler.start()
+atexit.register(lambda: scheduler.shutdown(wait=False))
+
+# ================= EXPORT PDF =================
+@app.route('/export_pdf')
+def export_pdf():
+    if not session.get('logged_in'):
+        return redirect('/login')
+        
+    # Auth check: Only admin and faculty can export PDFs
+    if session.get('role') not in ['admin', 'faculty']:
+        return "Access Denied: Faculty/Admin only", 403
+        
+    start_date = request.args.get('start_date', '').strip()
+    end_date = request.args.get('end_date', '').strip()
+    subject = request.args.get('subject', '').strip().lower()
+    
+    if not start_date: start_date = None
+    if not end_date: end_date = None
+    if not subject: subject = None
+    
+    try:
+        pdf_bytes = generate_attendance_pdf(supabase_client, subject, start_date, end_date)
+        buffer = io.BytesIO(pdf_bytes)
+        buffer.seek(0)
+        return send_file(
+            buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f"attendance_report_{subject or 'all'}.pdf"
+        )
+    except Exception as e:
+        return f"Error generating PDF: {str(e)}"
 
 # ================= EXPORT CSV =================
 @app.route('/export_csv')
@@ -536,4 +814,4 @@ def delete(id):
 
 # ================= RUN =================
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True, use_reloader=False)
