@@ -897,6 +897,40 @@
         canvas {
             display: none;
         }
+
+        /* Retrain status indicator (Issue #55) */
+        .retrain-status {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            background: rgba(5, 15, 30, 0.85);
+            border: 1px solid rgba(255, 179, 0, 0.3);
+            border-radius: 10px;
+            padding: 12px 20px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            color: var(--neon-amber);
+            letter-spacing: 1px;
+        }
+
+        .retrain-status.show {
+            display: flex;
+        }
+
+        .retrain-status.done {
+            border-color: rgba(0, 255, 100, 0.3);
+            color: var(--neon-green);
+        }
+
+        .retrain-spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 179, 0, 0.2);
+            border-top-color: var(--neon-amber);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            flex-shrink: 0;
+        }
     </style>
 </head>
 
@@ -1201,6 +1235,12 @@
             </button>
         </div>
 
+    <!-- Retrain status indicator (Issue #55) -->
+        <div class="retrain-status" id="retrainStatus">
+            <div class="retrain-spinner" id="retrainSpinner"></div>
+            <span id="retrainMsg">⚙️ Retraining model...</span>
+        </div>
+
     </div><!-- end page -->
 
     <canvas id="captureCanvas"></canvas>
@@ -1367,7 +1407,7 @@
                 const result = await response.json();
                 if (result.success) {
                     showToast(`✅ ${name} enrolled successfully!`, false);
-                    setTimeout(() => window.location.href = '/', 2000);
+                    pollRetrainStatus();
                 } else {
                     showToast(result.message || 'Enrollment failed.', true);
                     submitBtn.disabled = false;
@@ -1499,6 +1539,41 @@
                 : `<polyline points="20 6 9 17 4 12"/>`;
             setTimeout(() => t.classList.add('show'), 10);
             setTimeout(() => t.classList.remove('show'), 3500);
+        }
+
+        // ── Retrain status polling (Issue #55) ────────────────────
+        function pollRetrainStatus() {
+            const indicator = document.getElementById('retrainStatus');
+            const spinner   = document.getElementById('retrainSpinner');
+            const msg       = document.getElementById('retrainMsg');
+            let   elapsed   = 0;
+            const MAX_WAIT  = 60000;  // redirect after 60s even if still running
+            const INTERVAL  = 2000;
+
+            indicator.className = 'retrain-status show';
+            spinner.style.display = 'block';
+            msg.textContent = '⚙️ Retraining model...';
+
+            const poll = setInterval(async () => {
+                elapsed += INTERVAL;
+                try {
+                    const r = await fetch('/retrain_status');
+                    const j = await r.json();
+                    if (!j.running) {
+                        clearInterval(poll);
+                        spinner.style.display = 'none';
+                        indicator.className = 'retrain-status show done';
+                        msg.textContent = `✅ Model updated — ${j.student_count} student(s) loaded`;
+                        setTimeout(() => window.location.href = '/', 1500);
+                    }
+                } catch (_) {
+                    // network hiccup — keep polling
+                }
+                if (elapsed >= MAX_WAIT) {
+                    clearInterval(poll);
+                    window.location.href = '/';   // retrain still running in bg, redirect anyway
+                }
+            }, INTERVAL);
         }
     </script>
 </body>

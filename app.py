@@ -303,6 +303,36 @@ def train_model():
 # Load model once at startup
 load_model()
 
+# ================= ASYNC RETRAINING =================
+_retrain_lock   = threading.Lock()
+_retrain_status = {'running': False, 'last_completed': 'never', 'student_count': 0}
+
+
+def retrain_in_background():
+    """
+    Runs train_model() in a daemon thread so /register returns immediately.
+    _retrain_lock prevents concurrent registrations from triggering overlapping
+    retrains — if one is already running, the new request is silently skipped.
+    _retrain_status is written only from this function (single writer) so
+    CPython's GIL makes individual key assignments safe to read from Flask threads.
+    """
+    if _retrain_lock.locked():
+        print("[Retrain] Skipped — retrain already in progress.")
+        return
+    with _retrain_lock:
+        _retrain_status['running'] = True
+        try:
+            _, label_map = train_model()
+            _retrain_status['student_count'] = len(label_map) if label_map else 0
+            _retrain_status['last_completed'] = datetime.now().strftime('%H:%M:%S')
+            print(f"[Retrain] Complete — {_retrain_status['student_count']} student(s) loaded.")
+        except Exception as e:
+            print(f"[Retrain] Error: {e}")
+        finally:
+            _retrain_status['running'] = False
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ================= SESSION PROTECTION =================
 @app.before_request
 def require_login():
@@ -529,8 +559,8 @@ def register():
     except Exception as e:
         return jsonify({'success': False, 'message': f'DB error: {str(e)}'})
 
-    # Auto retrain after registration
-    train_model()
+    # Kick off background retrain — response returns immediately
+    threading.Thread(target=retrain_in_background, daemon=True).start()
 
     return jsonify({'success': True, 'message': f'Enrolled {name} with {saved} face photos.'})
 
@@ -983,6 +1013,14 @@ def delete(id):
 
     supabase_client.table('attendance').delete().eq('id', id).execute()
     return redirect('/attendance')
+
+
+@app.route('/retrain_status')
+def retrain_status():
+    """Returns background retrain state. Requires login."""
+    if not session.get('logged_in'):
+        return jsonify({'running': False, 'last_completed': 'unknown', 'student_count': 0}), 401
+    return jsonify(_retrain_status)
 
 
 @app.route('/db_status')
