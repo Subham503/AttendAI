@@ -13,6 +13,8 @@ import numpy as np
 import bcrypt
 import time as _time
 import pickle
+import uuid
+import base64
 from pathlib import Path
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -20,6 +22,7 @@ from report_engine import generate_attendance_pdf
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from liveness import verify_liveness
+import qrcode
 
 # Reg-no must be purely alphanumeric with optional hyphens/underscores,
 # 2-30 characters. Rejects any path traversal sequence (dots, slashes, etc.).
@@ -74,6 +77,26 @@ supabase_client = create_client(
 )
 
 CLASS_CONTEXT_SESSION_KEY = "class_session_context"
+
+# ================= QR CHECK-IN TOKEN STORE =================
+# In-memory store: { token_str: { subject, department, faculty_id, created_at, expires_at } }
+# Same in-memory approach as the LBPH model, circuit breaker, etc.
+_qr_sessions = {}
+_qr_lock = threading.Lock()
+
+QR_EXPIRY_MINUTES = int(os.getenv("QR_EXPIRY_MINUTES", 15))
+
+
+
+def _cleanup_expired_qr_tokens():
+    """Remove expired QR tokens. Called periodically by APScheduler."""
+    now = datetime.now()
+    with _qr_lock:
+        expired = [t for t, data in _qr_sessions.items() if data["expires_at"] <= now]
+        for t in expired:
+            del _qr_sessions[t]
+        if expired:
+            print(f"🧹 Cleaned up {len(expired)} expired QR token(s)")
 
 
 def normalize_class_context_value(value):
@@ -341,6 +364,7 @@ def require_login():
     '/login',
     '/register',
     '/static',
+    '/checkin',
 ]
 
     # Allow public pages
@@ -372,6 +396,11 @@ def login():
     username = data.get('username', '').strip()
     password = data.get('password', '').strip()
     role     = data.get('role', 'admin')
+    next_url = data.get('next', '').strip()
+
+    # Validate next_url to prevent open redirect vulnerabilities
+    if not next_url.startswith('/') or next_url.startswith('//'):
+        next_url = '/'
 
     if role == 'admin':
         result = supabase_client.table('admins').select('password').eq('username', username).execute()
@@ -381,7 +410,7 @@ def login():
             session['logged_in'] = True
             session['role']      = 'admin'
             session['name']      = username
-            return jsonify({'success': True, 'redirect': '/'})
+            return jsonify({'success': True, 'redirect': next_url})
         return jsonify({'success': False, 'message': 'Invalid admin credentials.'})
 
     elif role == 'faculty':
@@ -395,7 +424,7 @@ def login():
             session['faculty_id'] = username
             session['faculty_department'] = _normalize_scope_value(user.get('department'))
             session['faculty_subjects'] = _extract_faculty_subjects(user)
-            return jsonify({'success': True, 'redirect': '/'})
+            return jsonify({'success': True, 'redirect': next_url})
         return jsonify({'success': False, 'message': 'Invalid faculty credentials.'})
 
     elif role == 'student':
@@ -407,7 +436,7 @@ def login():
             session['role']      = 'student'
             session['name']      = user['name']
             session['reg_no']    = username
-            return jsonify({'success': True, 'redirect': '/'})
+            return jsonify({'success': True, 'redirect': next_url})
         return jsonify({'success': False, 'message': 'Invalid student credentials.'})
 
     return jsonify({'success': False, 'message': 'Invalid credentials.'})
@@ -870,6 +899,7 @@ def weekly_report_job():
 
 # Run every Friday at 17:00 (5 PM)
 scheduler.add_job(func=weekly_report_job, trigger="cron", day_of_week='fri', hour=17, minute=0)
+scheduler.add_job(func=_cleanup_expired_qr_tokens, trigger="interval", minutes=5, id="qr_cleanup")
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown(wait=False))
 
@@ -1029,6 +1059,152 @@ def db_status():
     if not session.get('logged_in'):
         return jsonify({'state': 'UNKNOWN'}), 401
     return jsonify({'state': _supabase_breaker.state})
+
+# ================= QR CODE GENERATION (Faculty/Admin) =================
+@app.route('/generate_qr', methods=['GET', 'POST'])
+def generate_qr():
+    if not session.get('logged_in'):
+        return redirect('/login')
+    if session.get('role') not in ['admin', 'faculty']:
+        return render_template('403.html'), 403
+
+    if request.method == 'GET':
+        return render_template('generate_qr.html', expiry_minutes=QR_EXPIRY_MINUTES)
+
+    # POST — generate a new QR token
+    data = request.get_json(silent=True) or {}
+    context = get_class_session_context(data)
+    subject = context["subject"]
+    department = context["department"]
+
+    if not _current_user_can_access_class(department, subject):
+        return jsonify({'success': False, 'message': 'Access denied for this department or subject'}), 403
+
+    token = str(uuid.uuid4())
+    now = datetime.now()
+    expires_at = now + timedelta(minutes=QR_EXPIRY_MINUTES)
+
+    with _qr_lock:
+        _qr_sessions[token] = {
+            'subject': subject,
+            'department': department,
+            'faculty_id': session.get('faculty_id', session.get('name', 'admin')),
+            'created_at': now,
+            'expires_at': expires_at,
+        }
+
+   
+    # Build check-in URL (avoid trusting Host header for public links)
+    base_url = os.getenv("PUBLIC_BASE_URL", request.host_url)
+    if not base_url.endswith('/'):
+        base_url += '/'
+    checkin_url = f"{base_url}checkin/{token}"
+
+    # Generate QR image → base64 data URI
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=2)
+    qr.add_data(checkin_url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#00fff7", back_color="#020810")
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+    return jsonify({
+        'success': True,
+        'qr_image': f'data:image/png;base64,{qr_b64}',
+        'token': token,
+        'checkin_url': checkin_url,
+        'subject': subject,
+        'department': department,
+        'expires_at': expires_at.isoformat(),
+        'expiry_minutes': QR_EXPIRY_MINUTES,
+    })
+
+# ================= QR CHECK-IN (Student) =================
+@app.route('/checkin/<token>')
+def checkin(token):
+    # If not logged in, redirect to login with return URL
+    if not session.get('logged_in'):
+        return redirect(f'/login?next=/checkin/{token}')
+
+    if session.get('role') != 'student':
+        return render_template('checkin.html',
+                               error='Only students can check in via QR code.',
+                               auto_checkin=False)
+
+    # Validate token
+    with _qr_lock:
+        qr_data = _qr_sessions.get(token)
+
+    if not qr_data:
+        return render_template('checkin.html',
+                               error='Invalid or expired QR code. Please ask your faculty for a new one.',
+                               auto_checkin=False)
+
+    if datetime.now() > qr_data['expires_at']:
+        with _qr_lock:
+            _qr_sessions.pop(token, None)
+        return render_template('checkin.html',
+                               error='This QR code has expired. Please ask your faculty for a new one.',
+                               auto_checkin=False)
+
+    # Look up student
+    reg_no = session.get('reg_no')
+    student_res = supabase_client.table('students').select('id, name, department, class').eq('reg_no', reg_no).execute()
+    student = student_res.data[0] if student_res.data else None
+
+    if not student:
+        return render_template('checkin.html',
+                               error='Student record not found. Please contact admin.',
+                               auto_checkin=False)
+
+    subject = qr_data['subject']
+    token_department = qr_data.get('department')
+    if _normalize_scope_value(student.get('department')) != _normalize_scope_value(token_department):
+         return render_template('checkin.html',
+                                error='This QR code is for a different department. Please ask your faculty for the correct QR.',
+                                auto_checkin=False)
+
+    now = datetime.now()
+
+    # Duplicate check
+    existing = supabase_client.table('attendance').select('id').eq('student_id', student['id']).ilike('subject', subject).ilike('department', token_department).eq('date', str(now.date())).execute()
+
+    if existing.data:
+        return render_template('checkin.html',
+                               error=None,
+                               auto_checkin=True,
+                               already_marked=True,
+                               student_name=student['name'],
+                               subject=subject,
+                               department=qr_data['department'])
+
+    # Mark attendance
+    try:
+        supabase_client.table('attendance').insert({
+            'student_id': student['id'],
+            'name': student['name'],
+            'department': student['department'],
+            'class': student['class'],
+            'subject': subject,
+            'date': str(now.date()),
+            'time': str(now.time()),
+            'status': 'Present'
+        }).execute()
+    except Exception as e:
+        print(f"QR check-in DB error: {e}")
+        return render_template('checkin.html',
+                               error='Database error. Please try again.',
+                               auto_checkin=False)
+
+    return render_template('checkin.html',
+                           error=None,
+                           auto_checkin=True,
+                           already_marked=False,
+                           student_name=student['name'],
+                           subject=subject,
+                           department=qr_data['department'])
 
 # ================= RUN =================
 if __name__ == "__main__":

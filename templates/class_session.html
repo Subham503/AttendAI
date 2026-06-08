@@ -725,6 +725,17 @@
         </svg>
         Start Attendance Scan
       </button>
+
+      <!-- QR Code button -->
+      <button class="submit-btn" onclick="generateQR()" style="margin-top: 12px; border-color: rgba(255, 140, 0, 0.5); color: #ff8c00; background: linear-gradient(135deg, rgba(255, 140, 0, 0.12), rgba(255, 140, 0, 0.05));">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="3" height="3" />
+        </svg>
+        Generate QR Code
+      </button>
     </div>
   </div>
 
@@ -823,6 +834,13 @@
         time: selectedTime
       });
       window.location.href = '/camera?' + params.toString();
+    }
+
+    function generateQR() {
+      const subj = document.getElementById('subject').value;
+      if (!subj) { alert('Please select a subject before generating QR.'); return; }
+      const params = new URLSearchParams({ subject: subj });
+      window.location.href = '/generate_qr?' + params.toString();
     }
   </script>
 </body>

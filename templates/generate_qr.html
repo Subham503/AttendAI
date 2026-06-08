@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Generate QR — AttendAI</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600&display=swap"
+    rel="stylesheet" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --neon-cyan: #00fff7;
+      --neon-pink: #ff00e5;
+      --neon-blue: #0066ff;
+      --neon-orange: #ff8c00;
+      --dark: #020810;
+      --dark2: #050f1e;
+      --dark3: #081525;
+      --text: #c8e6ff;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow-x: hidden;
+    }
+
+    body {
+      background: var(--dark);
+      font-family: 'Rajdhani', sans-serif;
+      color: var(--text);
+    }
+
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 255, 247, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 255, 247, 0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridMove 20s linear infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    @keyframes gridMove {
+      0% {
+        background-position: 0 0;
+      }
+
+      100% {
+        background-position: 60px 60px;
+      }
+    }
+
+    .glow-orb {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+      filter: blur(80px);
+      opacity: 0.12;
+    }
+
+    .glow-orb.cyan {
+      width: 600px;
+      height: 600px;
+      background: var(--neon-cyan);
+      top: -200px;
+      left: -100px;
+      animation: orbFloat1 8s ease-in-out infinite;
+    }
+
+    .glow-orb.orange {
+      width: 500px;
+      height: 500px;
+      background: var(--neon-orange);
+      bottom: -200px;
+      right: -100px;
+      animation: orbFloat2 10s ease-in-out infinite;
+    }
+
+    @keyframes orbFloat1 {
+
+      0%,
+      100% {
+        transform: translate(0, 0);
+      }
+
+      50% {
+        transform: translate(60px, 40px);
+      }
+    }
+
+    @keyframes orbFloat2 {
+
+      0%,
+      100% {
+        transform: translate(0, 0);
+      }
+
+      50% {
+        transform: translate(-40px, -60px);
+      }
+    }
+
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.08) 2px, rgba(0, 0, 0, 0.08) 4px);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .corner {
+      position: fixed;
+      width: 50px;
+      height: 50px;
+      z-index: 2;
+      opacity: 0.3;
+    }
+
+    .corner.tl {
+      top: 16px;
+      left: 16px;
+      border-top: 2px solid var(--neon-cyan);
+      border-left: 2px solid var(--neon-cyan);
+    }
+
+    .corner.tr {
+      top: 16px;
+      right: 16px;
+      border-top: 2px solid var(--neon-cyan);
+      border-right: 2px solid var(--neon-cyan);
+    }
+
+    .corner.bl {
+      bottom: 16px;
+      left: 16px;
+      border-bottom: 2px solid var(--neon-cyan);
+      border-left: 2px solid var(--neon-cyan);
+    }
+
+    .corner.br {
+      bottom: 16px;
+      right: 16px;
+      border-bottom: 2px solid var(--neon-cyan);
+      border-right: 2px solid var(--neon-cyan);
+    }
+
+    .page {
+      position: relative;
+      z-index: 2;
+      width: 100vw;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      gap: 28px;
+    }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: min(700px, 95vw);
+    }
+
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: rgba(0, 255, 247, 0.5);
+      letter-spacing: 2px;
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: color 0.2s;
+      cursor: pointer;
+      background: none;
+      border: none;
+    }
+
+    .back-btn:hover {
+      color: var(--neon-cyan);
+    }
+
+    .back-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+    }
+
+    .page-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, var(--neon-orange), #fff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .meta-info {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: rgba(255, 140, 0, 0.4);
+      letter-spacing: 2px;
+      text-align: right;
+    }
+
+    /* Main card */
+    .qr-card {
+      width: min(700px, 95vw);
+      background: rgba(5, 15, 30, 0.85);
+      border: 1px solid rgba(255, 140, 0, 0.18);
+      border-radius: 16px;
+      padding: 36px 40px;
+      backdrop-filter: blur(12px);
+      animation: fadeUp 0.6s ease both;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255, 140, 0, 0.08);
+    }
+
+    .header-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: rgba(255, 140, 0, 0.08);
+      border: 1px solid rgba(255, 140, 0, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px rgba(255, 140, 0, 0.1);
+    }
+
+    .header-icon svg {
+      width: 22px;
+      height: 22px;
+      stroke: var(--neon-orange);
+    }
+
+    .header-text h2 {
+      font-family: 'Orbitron', monospace;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--neon-orange);
+    }
+
+    .header-text p {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: rgba(200, 230, 255, 0.35);
+      letter-spacing: 2px;
+      margin-top: 4px;
+    }
+
+    /* Form fields */
+    .fields-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .field-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: rgba(255, 140, 0, 0.5);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .field-label svg {
+      width: 12px;
+      height: 12px;
+      stroke: currentColor;
+      opacity: 0.8;
+    }
+
+    .field-input {
+      width: 100%;
+      background: rgba(8, 21, 37, 0.9);
+      border: 1px solid rgba(255, 140, 0, 0.15);
+      border-radius: 8px;
+      padding: 13px 16px;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.25s, box-shadow 0.25s;
+      letter-spacing: 1px;
+    }
+
+    .field-input::placeholder {
+      color: rgba(200, 230, 255, 0.2);
+      font-weight: 400;
+    }
+
+    .field-input:focus {
+      border-color: rgba(255, 140, 0, 0.5);
+      box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.06), 0 0 20px rgba(255, 140, 0, 0.06);
+    }
+
+    /* Generate button */
+    .generate-btn {
+      width: 100%;
+      background: linear-gradient(135deg, rgba(255, 140, 0, 0.12), rgba(255, 140, 0, 0.05));
+      border: 1px solid rgba(255, 140, 0, 0.5);
+      border-radius: 10px;
+      padding: 16px;
+      font-family: 'Orbitron', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--neon-orange);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .generate-btn::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--neon-orange), transparent);
+      transition: left 0.5s;
+    }
+
+    .generate-btn:hover {
+      background: linear-gradient(135deg, rgba(255, 140, 0, 0.2), rgba(255, 140, 0, 0.08));
+      box-shadow: 0 0 30px rgba(255, 140, 0, 0.15);
+      transform: translateY(-1px);
+    }
+
+    .generate-btn:hover::after {
+      left: 100%;
+    }
+
+    .generate-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .generate-btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+    }
+
+    /* QR Result area */
+    .qr-result {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      margin-top: 28px;
+      padding-top: 28px;
+      border-top: 1px solid rgba(255, 140, 0, 0.1);
+      animation: fadeUp 0.5s ease both;
+    }
+
+    .qr-result.visible {
+      display: flex;
+    }
+
+    .qr-image-wrapper {
+      position: relative;
+      padding: 16px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 140, 0, 0.2);
+      border-radius: 14px;
+      box-shadow: 0 0 40px rgba(255, 140, 0, 0.06);
+    }
+
+    .qr-image-wrapper img {
+      display: block;
+      width: 220px;
+      height: 220px;
+      image-rendering: pixelated;
+      border-radius: 6px;
+    }
+
+    /* Animated scan line over QR */
+    .qr-image-wrapper::after {
+      content: '';
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--neon-orange), transparent);
+      animation: scanQR 2.5s ease-in-out infinite;
+      opacity: 0.6;
+    }
+
+    @keyframes scanQR {
+      0% {
+        top: 16px;
+      }
+
+      50% {
+        top: calc(100% - 18px);
+      }
+
+      100% {
+        top: 16px;
+      }
+    }
+
+    .qr-meta {
+      text-align: center;
+    }
+
+    .qr-meta .session-label {
+      font-family: 'Orbitron', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--neon-orange);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .qr-meta .session-detail {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: rgba(200, 230, 255, 0.4);
+      letter-spacing: 1.5px;
+    }
+
+    /* Timer */
+    .timer-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      background: rgba(255, 140, 0, 0.06);
+      border: 1px solid rgba(255, 140, 0, 0.2);
+      border-radius: 20px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+      color: var(--neon-orange);
+      letter-spacing: 2px;
+    }
+
+    .timer-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--neon-orange);
+      animation: blink 1.5s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.2;
+      }
+    }
+
+    .timer-badge.expired {
+      border-color: rgba(255, 60, 60, 0.3);
+      color: #ff4444;
+    }
+
+    .timer-badge.expired .timer-dot {
+      background: #ff4444;
+      animation: none;
+    }
+
+    /* Copy link button */
+    .copy-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: rgba(8, 21, 37, 0.9);
+      border: 1px solid rgba(0, 255, 247, 0.2);
+      border-radius: 8px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--neon-cyan);
+      cursor: pointer;
+      transition: all 0.25s;
+      text-transform: uppercase;
+    }
+
+    .copy-btn:hover {
+      border-color: rgba(0, 255, 247, 0.5);
+      box-shadow: 0 0 16px rgba(0, 255, 247, 0.08);
+    }
+
+    .copy-btn.copied {
+      border-color: rgba(0, 255, 100, 0.5);
+      color: #00ff64;
+    }
+
+    .copy-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+    }
+
+    .bottom-bar {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: rgba(200, 230, 255, 0.15);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      z-index: 2;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .fields-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .qr-card {
+        padding: 24px 20px;
+      }
+
+      .top-bar {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="grid-bg"></div>
+  <div class="glow-orb cyan"></div>
+  <div class="glow-orb orange"></div>
+  <div class="scanlines"></div>
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+
+  <div class="page">
+    <!-- Top bar -->
+    <div class="top-bar">
+      <a href="/" class="back-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+        Back
+      </a>
+      <div class="page-title">QR Check-in</div>
+      <div class="meta-info" id="live-clock">--:-- --</div>
+    </div>
+
+    <!-- Main card -->
+    <div class="qr-card">
+      <div class="card-header">
+        <div class="header-icon">
+          <!-- QR icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="3" height="3" />
+            <line x1="21" y1="14" x2="21" y2="14.01" />
+            <line x1="21" y1="21" x2="21" y2="21.01" />
+            <line x1="17" y1="21" x2="17" y2="21.01" />
+            <line x1="14" y1="18" x2="14" y2="18.01" />
+            <line x1="18" y1="18" x2="18" y2="18.01" />
+          </svg>
+        </div>
+        <div class="header-text">
+          <h2>Generate QR Code</h2>
+          <p>STUDENTS SCAN TO AUTO CHECK-IN · EXPIRES IN {{ expiry_minutes if expiry_minutes else 15 }} MIN</p>
+        </div>
+      </div>
+
+      <!-- Subject & Department -->
+      <div class="fields-grid">
+        <div class="field">
+          <div class="field-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            </svg>
+            Subject
+          </div>
+          <input type="text" class="field-input" id="subject" placeholder="e.g. Mathematics" />
+        </div>
+
+        <div class="field">
+          <div class="field-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
+            Department
+          </div>
+          <input type="text" class="field-input" id="department" placeholder="e.g. CSE" />
+        </div>
+      </div>
+
+      <button class="generate-btn" id="generateBtn" onclick="generateQR()">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="3" height="3" />
+        </svg>
+        Generate QR Code
+      </button>
+
+      <!-- QR Result (hidden until generated) -->
+      <div class="qr-result" id="qrResult">
+        <div class="qr-image-wrapper">
+          <img id="qrImage" src="" alt="QR Code" />
+        </div>
+
+        <div class="qr-meta">
+          <div class="session-label" id="qrSessionLabel">—</div>
+          <div class="session-detail" id="qrSessionDetail">—</div>
+        </div>
+
+        <div class="timer-badge" id="timerBadge">
+          <div class="timer-dot"></div>
+          <span id="timerText">--:--</span>
+        </div>
+
+        <button class="copy-btn" id="copyBtn" onclick="copyLink()">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          Copy Check-in Link
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-bar">AttendAI v2.0 &nbsp;·&nbsp; QR CODE GENERATOR</div>
+
+  <script>
+    let checkinUrl = '';
+    let expiresAt = null;
+    let timerInterval = null;
+
+    // Live clock
+    function updateClock() {
+      const now = new Date();
+      const h = now.getHours();
+      const m = String(now.getMinutes()).padStart(2, '0');
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const h12 = String(h % 12 || 12).padStart(2, '0');
+      document.getElementById('live-clock').textContent = h12 + ':' + m + ' ' + ampm;
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+    // Prefill from query string (e.g. /generate_qr?subject=math&department=cse)
+     const params = new URLSearchParams(window.location.search);
+     const subjectParam = params.get('subject');
+     const deptParam = params.get('department');
+     if (subjectParam) document.getElementById('subject').value = subjectParam;
+     if (deptParam) document.getElementById('department').value = deptParam;
+
+    async function generateQR() {
+      const subject = document.getElementById('subject').value.trim();
+      const department = document.getElementById('department').value.trim();
+      const btn = document.getElementById('generateBtn');
+
+      if (!subject) {
+        alert('Please enter a subject.');
+        return;
+      }
+      if (!department) {
+        alert('Please enter a department.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </svg>
+        Generating...
+      `;
+
+      try {
+        const res = await fetch('/generate_qr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject, department })
+        });
+        const data = await res.json();
+
+        if (!data.success) {
+          alert(data.message || 'Failed to generate QR code.');
+          return;
+        }
+
+        // Show result
+        document.getElementById('qrImage').src = data.qr_image;
+        document.getElementById('qrSessionLabel').textContent =
+          data.subject.toUpperCase() + ' · ' + data.department.toUpperCase();
+        document.getElementById('qrSessionDetail').textContent =
+          'TOKEN: ' + data.token.substring(0, 8).toUpperCase() + '...';
+
+        checkinUrl = data.checkin_url;
+        expiresAt = new Date(data.expires_at);
+
+        document.getElementById('qrResult').classList.add('visible');
+
+        // Start countdown
+        if (timerInterval) clearInterval(timerInterval);
+        updateTimer();
+        timerInterval = setInterval(updateTimer, 1000);
+
+      } catch (err) {
+        alert('Network error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="3" height="3" />
+          </svg>
+          Generate QR Code
+        `;
+      }
+    }
+
+    function updateTimer() {
+      const now = new Date();
+      const diff = expiresAt - now;
+      const badge = document.getElementById('timerBadge');
+      const text = document.getElementById('timerText');
+
+      if (diff <= 0) {
+        badge.classList.add('expired');
+        text.textContent = 'EXPIRED';
+        if (timerInterval) clearInterval(timerInterval);
+        return;
+      }
+
+      badge.classList.remove('expired');
+      const mins = Math.floor(diff / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+      text.textContent = String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0') + ' REMAINING';
+    }
+
+    function copyLink() {
+      if (!checkinUrl) return;
+      navigator.clipboard.writeText(checkinUrl).then(() => {
+        const btn = document.getElementById('copyBtn');
+        btn.classList.add('copied');
+        btn.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Copied!
+        `;
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          btn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            Copy Check-in Link
+          `;
+        }, 2000);
+      });
+    }
+  </script>
+
+  <style>
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</body>
+
+</html>
