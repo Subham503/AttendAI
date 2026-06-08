@@ -1139,9 +1139,9 @@ def generate_qr():
 # ================= QR CHECK-IN (Student) =================
 @app.route('/checkin/<token>', methods=['GET', 'POST'])
 def checkin(token):
-    # If not logged in, redirect to login with return URL
+    # If not logged in, redirect to login first
     if not session.get('logged_in'):
-        return redirect(f'/login?next=/checkin/{token}')
+        return redirect('/login')
 
     if session.get('role') != 'student':
         return render_template('checkin.html',
