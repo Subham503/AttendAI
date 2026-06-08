@@ -1155,10 +1155,16 @@ def checkin(token):
                                auto_checkin=False)
 
     subject = qr_data['subject']
+    token_department = qr_data.get('department')
+     if _normalize_scope_value(student.get('department')) != _normalize_scope_value(token_department):
+         return render_template('checkin.html',
+                                error='This QR code is for a different department. Please ask your faculty for the correct QR.',
+                                auto_checkin=False)
+
     now = datetime.now()
 
     # Duplicate check
-    existing = supabase_client.table('attendance').select('id').eq('student_id', student['id']).ilike('subject', subject).eq('date', str(now.date())).execute()
+    existing = supabase_client.table('attendance').select('id').eq('student_id', student['id']).ilike('subject', subject).ilike('department', token_department).eq('date', str(now.date())).execute()
 
     if existing.data:
         return render_template('checkin.html',
