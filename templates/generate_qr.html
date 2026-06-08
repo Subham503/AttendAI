@@ -717,6 +717,12 @@
     }
     updateClock();
     setInterval(updateClock, 1000);
+    // Prefill from query string (e.g. /generate_qr?subject=math&department=cse)
+     const params = new URLSearchParams(window.location.search);
+     const subjectParam = params.get('subject');
+     const deptParam = params.get('department');
+     if (subjectParam) document.getElementById('subject').value = subjectParam;
+     if (deptParam) document.getElementById('department').value = deptParam;
 
     async function generateQR() {
       const subject = document.getElementById('subject').value.trim();
