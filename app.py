@@ -1068,7 +1068,7 @@ def generate_qr():
         return render_template('403.html'), 403
 
     if request.method == 'GET':
-        return render_template('generate_qr.html')
+        return render_template('generate_qr.html', expiry_minutes=QR_EXPIRY_MINUTES)
 
     # POST — generate a new QR token
     data = request.get_json(silent=True) or {}
