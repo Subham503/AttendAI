@@ -99,6 +99,17 @@ def _cleanup_expired_qr_tokens():
             print(f"🧹 Cleaned up {len(expired)} expired QR token(s)")
 
 
+def _public_checkin_base_url():
+    base_url = (os.getenv("PUBLIC_BASE_URL") or "").strip()
+    if not base_url:
+        raise RuntimeError("PUBLIC_BASE_URL_MISSING")
+    if not re.match(r"^https?://", base_url):
+        raise RuntimeError("PUBLIC_BASE_URL_INVALID")
+    if not base_url.endswith('/'):
+        base_url += '/'
+    return base_url
+
+
 def normalize_class_context_value(value):
     value = (value or "general").strip().lower()
     return value or "general"
@@ -1093,11 +1104,15 @@ def generate_qr():
             'expires_at': expires_at,
         }
 
-   
-    # Build check-in URL (avoid trusting Host header for public links)
-    base_url = os.getenv("PUBLIC_BASE_URL", request.host_url)
-    if not base_url.endswith('/'):
-        base_url += '/'
+    try:
+        base_url = _public_checkin_base_url()
+    except RuntimeError:
+        return jsonify({
+            'success': False,
+            'message': 'PUBLIC_BASE_URL is not configured correctly. Please contact admin.',
+        }), 500
+
+    # Build check-in URL from trusted configuration.
     checkin_url = f"{base_url}checkin/{token}"
 
     # Generate QR image → base64 data URI
@@ -1122,7 +1137,7 @@ def generate_qr():
     })
 
 # ================= QR CHECK-IN (Student) =================
-@app.route('/checkin/<token>')
+@app.route('/checkin/<token>', methods=['GET', 'POST'])
 def checkin(token):
     # If not logged in, redirect to login with return URL
     if not session.get('logged_in'):
@@ -1151,7 +1166,26 @@ def checkin(token):
 
     # Look up student
     reg_no = session.get('reg_no')
-    student_res = supabase_client.table('students').select('id, name, department, class').eq('reg_no', reg_no).execute()
+    try:
+        student_res = supabase_with_retry(
+            lambda reg_no=reg_no: supabase_client
+            .table('students')
+            .select('id, name, department, class')
+            .eq('reg_no', reg_no)
+            .execute()
+        )
+    except RuntimeError as e:
+        if 'DB_OPEN' in str(e):
+            return render_template('checkin.html',
+                                   error='Database is temporarily unavailable. Please try again.',
+                                   auto_checkin=False)
+        raise
+    except Exception as e:
+        print(f"QR check-in DB error (student lookup): {e}")
+        return render_template('checkin.html',
+                               error='Database error. Please try again.',
+                               auto_checkin=False)
+
     student = student_res.data[0] if student_res.data else None
 
     if not student:
@@ -1166,10 +1200,57 @@ def checkin(token):
                                 error='This QR code is for a different department. Please ask your faculty for the correct QR.',
                                 auto_checkin=False)
 
+    if request.method == 'GET':
+        csrf_token = uuid.uuid4().hex
+        session['qr_checkin_csrf_token'] = csrf_token
+        session['qr_checkin_csrf_for_token'] = token
+        return render_template('checkin.html',
+                              error=None,
+                              auto_checkin=False,
+                              confirm_checkin=True,
+                              student_name=student['name'],
+                              subject=subject,
+                              department=qr_data['department'],
+                              csrf_token=csrf_token)
+
+    submitted_csrf = (request.form.get('csrf_token') or '').strip()
+    if (
+        not submitted_csrf
+        or submitted_csrf != session.get('qr_checkin_csrf_token')
+        or token != session.get('qr_checkin_csrf_for_token')
+    ):
+        return render_template('checkin.html',
+                              error='Invalid or expired check-in request. Please scan the QR code again.',
+                              auto_checkin=False)
+
+    session.pop('qr_checkin_csrf_token', None)
+    session.pop('qr_checkin_csrf_for_token', None)
+
     now = datetime.now()
 
     # Duplicate check
-    existing = supabase_client.table('attendance').select('id').eq('student_id', student['id']).ilike('subject', subject).ilike('department', token_department).eq('date', str(now.date())).execute()
+    try:
+        existing = supabase_with_retry(
+           lambda sid=student['id'], subj=subject, dept=token_department, date_value=str(now.date()): supabase_client
+           .table('attendance')
+           .select('id')
+           .eq('student_id', sid)
+           .ilike('subject', subj)
+           .ilike('department', dept)
+           .eq('date', date_value)
+           .execute()
+        )
+    except RuntimeError as e:
+        if 'DB_OPEN' in str(e):
+           return render_template('checkin.html',
+                                  error='Database is temporarily unavailable. Please try again.',
+                                  auto_checkin=False)
+        raise
+    except Exception as e:
+        print(f"QR check-in DB error (duplicate check): {e}")
+        return render_template('checkin.html',
+                              error='Database error. Please try again.',
+                              auto_checkin=False)
 
     if existing.data:
         return render_template('checkin.html',
@@ -1182,16 +1263,24 @@ def checkin(token):
 
     # Mark attendance
     try:
-        supabase_client.table('attendance').insert({
-            'student_id': student['id'],
-            'name': student['name'],
-            'department': student['department'],
-            'class': student['class'],
-            'subject': subject,
-            'date': str(now.date()),
-            'time': str(now.time()),
-            'status': 'Present'
-        }).execute()
+        supabase_with_retry(
+            lambda: supabase_client.table('attendance').insert({
+                'student_id': student['id'],
+                'name': student['name'],
+                'department': student['department'],
+                'class': student['class'],
+                'subject': subject,
+                'date': str(now.date()),
+                'time': str(now.time()),
+                'status': 'Present'
+            }).execute()
+        )
+    except RuntimeError as e:
+        if 'DB_OPEN' in str(e):
+            return render_template('checkin.html',
+                                   error='Database is temporarily unavailable. Please try again.',
+                                   auto_checkin=False)
+        raise
     except Exception as e:
         print(f"QR check-in DB error: {e}")
         return render_template('checkin.html',

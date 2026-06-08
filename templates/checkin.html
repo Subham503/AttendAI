@@ -414,6 +414,29 @@
       stroke: currentColor;
     }
 
+    .confirm-form {
+      margin-top: 12px;
+    }
+
+    .confirm-btn {
+      border: 1px solid rgba(0, 255, 100, 0.4);
+      background: rgba(0, 255, 100, 0.08);
+      color: #00ff64;
+      padding: 10px 24px;
+      border-radius: 999px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+
+    .confirm-btn:hover {
+      background: rgba(0, 255, 100, 0.14);
+      box-shadow: 0 0 18px rgba(0, 255, 100, 0.2);
+    }
+
     .bottom-bar {
       position: fixed;
       bottom: 20px;
@@ -459,6 +482,26 @@
         </svg>
         Go to Dashboard
       </a>
+    </div>
+
+    {% elif confirm_checkin %}
+    <!-- Confirm State -->
+    <div class="checkin-card warning">
+      <div class="status-icon warning-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      </div>
+      <div class="status-title warning-text">Confirm Check-In</div>
+      <div class="student-name">{{ student_name }}</div>
+      <div class="session-info">{{ subject }} · {{ department }}</div>
+      <div class="status-message">Tap confirm to mark your attendance for this class.</div>
+      <form class="confirm-form" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <button type="submit" class="confirm-btn">Confirm Check-In</button>
+      </form>
     </div>
 
     {% elif auto_checkin and already_marked %}
