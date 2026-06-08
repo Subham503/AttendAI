@@ -1184,10 +1184,13 @@
 
       setLoading(true);
 
+      const urlParams = new URLSearchParams(window.location.search);
+      const nextUrl = urlParams.get('next') || '';
+
       fetch('/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: user, password: pwd, role: currentRole })
+        body: JSON.stringify({ username: user, password: pwd, role: currentRole, next: nextUrl })
       })
         .then(r => r.json())
         .then(data => {
@@ -1206,6 +1209,15 @@
     }
 
     document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+    // Auto-select role based on next redirect URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const nextUrl = urlParams.get('next') || '';
+    if (nextUrl.startsWith('/checkin/')) {
+      setRole('student');
+    } else {
+      setRole('admin');
+    }
   </script>
 </body>
 

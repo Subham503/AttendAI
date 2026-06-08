@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QR Check-in — AttendAI</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600&display=swap"
+    rel="stylesheet" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --neon-cyan: #00fff7;
+      --neon-pink: #ff00e5;
+      --neon-green: #00ff64;
+      --neon-orange: #ff8c00;
+      --dark: #020810;
+      --dark2: #050f1e;
+      --dark3: #081525;
+      --text: #c8e6ff;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background: var(--dark);
+      font-family: 'Rajdhani', sans-serif;
+      color: var(--text);
+    }
+
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 255, 247, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 255, 247, 0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridMove 20s linear infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    @keyframes gridMove {
+      0% {
+        background-position: 0 0;
+      }
+
+      100% {
+        background-position: 60px 60px;
+      }
+    }
+
+    .glow-orb {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+      filter: blur(80px);
+      opacity: 0.12;
+    }
+
+    .glow-orb.cyan {
+      width: 600px;
+      height: 600px;
+      background: var(--neon-cyan);
+      top: -200px;
+      left: -100px;
+      animation: orbFloat1 8s ease-in-out infinite;
+    }
+
+    .glow-orb.green {
+      width: 500px;
+      height: 500px;
+      background: var(--neon-green);
+      bottom: -200px;
+      right: -100px;
+      animation: orbFloat2 10s ease-in-out infinite;
+    }
+
+    @keyframes orbFloat1 {
+
+      0%,
+      100% {
+        transform: translate(0, 0);
+      }
+
+      50% {
+        transform: translate(60px, 40px);
+      }
+    }
+
+    @keyframes orbFloat2 {
+
+      0%,
+      100% {
+        transform: translate(0, 0);
+      }
+
+      50% {
+        transform: translate(-40px, -60px);
+      }
+    }
+
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.08) 2px, rgba(0, 0, 0, 0.08) 4px);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .corner {
+      position: fixed;
+      width: 50px;
+      height: 50px;
+      z-index: 2;
+      opacity: 0.3;
+    }
+
+    .corner.tl {
+      top: 16px;
+      left: 16px;
+      border-top: 2px solid var(--neon-cyan);
+      border-left: 2px solid var(--neon-cyan);
+    }
+
+    .corner.tr {
+      top: 16px;
+      right: 16px;
+      border-top: 2px solid var(--neon-cyan);
+      border-right: 2px solid var(--neon-cyan);
+    }
+
+    .corner.bl {
+      bottom: 16px;
+      left: 16px;
+      border-bottom: 2px solid var(--neon-cyan);
+      border-left: 2px solid var(--neon-cyan);
+    }
+
+    .corner.br {
+      bottom: 16px;
+      right: 16px;
+      border-bottom: 2px solid var(--neon-cyan);
+      border-right: 2px solid var(--neon-cyan);
+    }
+
+    .page {
+      position: relative;
+      z-index: 2;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      gap: 0;
+    }
+
+    /* Result card */
+    .checkin-card {
+      width: min(480px, 92vw);
+      background: rgba(5, 15, 30, 0.85);
+      border-radius: 18px;
+      padding: 40px 36px;
+      backdrop-filter: blur(12px);
+      text-align: center;
+      animation: fadeUp 0.6s ease both;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Success state */
+    .checkin-card.success {
+      border: 1px solid rgba(0, 255, 100, 0.3);
+    }
+
+    .checkin-card.error {
+      border: 1px solid rgba(255, 60, 60, 0.3);
+    }
+
+    .checkin-card.warning {
+      border: 1px solid rgba(255, 200, 0, 0.3);
+    }
+
+    /* Status icon */
+    .status-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      animation: iconPop 0.5s ease 0.3s both;
+    }
+
+    @keyframes iconPop {
+      from {
+        transform: scale(0.5);
+        opacity: 0;
+      }
+
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    .status-icon.success-icon {
+      background: rgba(0, 255, 100, 0.1);
+      border: 2px solid rgba(0, 255, 100, 0.4);
+      box-shadow: 0 0 30px rgba(0, 255, 100, 0.1);
+    }
+
+    .status-icon.success-icon svg {
+      width: 36px;
+      height: 36px;
+      stroke: #00ff64;
+      stroke-width: 2.5;
+    }
+
+    .status-icon.error-icon {
+      background: rgba(255, 60, 60, 0.1);
+      border: 2px solid rgba(255, 60, 60, 0.4);
+      box-shadow: 0 0 30px rgba(255, 60, 60, 0.1);
+    }
+
+    .status-icon.error-icon svg {
+      width: 36px;
+      height: 36px;
+      stroke: #ff4444;
+      stroke-width: 2.5;
+    }
+
+    .status-icon.warning-icon {
+      background: rgba(255, 200, 0, 0.1);
+      border: 2px solid rgba(255, 200, 0, 0.4);
+      box-shadow: 0 0 30px rgba(255, 200, 0, 0.1);
+    }
+
+    .status-icon.warning-icon svg {
+      width: 36px;
+      height: 36px;
+      stroke: #ffc800;
+      stroke-width: 2.5;
+    }
+
+    .status-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .status-title.success-text {
+      color: #00ff64;
+    }
+
+    .status-title.error-text {
+      color: #ff4444;
+    }
+
+    .status-title.warning-text {
+      color: #ffc800;
+    }
+
+    .status-message {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      color: rgba(200, 230, 255, 0.5);
+      line-height: 1.7;
+      margin-bottom: 24px;
+    }
+
+    .student-name {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .session-info {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(0, 255, 247, 0.5);
+      margin-bottom: 20px;
+    }
+
+    /* Attendance confirmation badge */
+    .confirm-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 22px;
+      border-radius: 20px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .confirm-badge.present {
+      background: rgba(0, 255, 100, 0.06);
+      border: 1px solid rgba(0, 255, 100, 0.25);
+      color: #00ff64;
+    }
+
+    .confirm-badge.duplicate {
+      background: rgba(255, 200, 0, 0.06);
+      border: 1px solid rgba(255, 200, 0, 0.25);
+      color: #ffc800;
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      animation: blink 1.5s ease-in-out infinite;
+    }
+
+    .badge-dot.green {
+      background: #00ff64;
+    }
+
+    .badge-dot.yellow {
+      background: #ffc800;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.2;
+      }
+    }
+
+    /* Pulse ring animation for success */
+    .pulse-ring {
+      position: absolute;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 2px solid rgba(0, 255, 100, 0.3);
+      animation: pulseOut 1.5s ease-out infinite;
+    }
+
+    @keyframes pulseOut {
+      0% {
+        transform: scale(1);
+        opacity: 0.6;
+      }
+
+      100% {
+        transform: scale(2);
+        opacity: 0;
+      }
+    }
+
+    /* Home link */
+    .home-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 24px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: rgba(0, 255, 247, 0.4);
+      letter-spacing: 2px;
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    .home-link:hover {
+      color: var(--neon-cyan);
+    }
+
+    .home-link svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+    }
+
+    .bottom-bar {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: rgba(200, 230, 255, 0.15);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      z-index: 2;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="grid-bg"></div>
+  <div class="glow-orb cyan"></div>
+  <div class="glow-orb green"></div>
+  <div class="scanlines"></div>
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+
+  <div class="page">
+    {% if error %}
+    <!-- Error State -->
+    <div class="checkin-card error">
+      <div class="status-icon error-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="15" y1="9" x2="9" y2="15" />
+          <line x1="9" y1="9" x2="15" y2="15" />
+        </svg>
+      </div>
+      <div class="status-title error-text">Check-in Failed</div>
+      <div class="status-message">{{ error }}</div>
+      <a href="/" class="home-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+        Go to Dashboard
+      </a>
+    </div>
+
+    {% elif auto_checkin and already_marked %}
+    <!-- Already Marked State -->
+    <div class="checkin-card warning">
+      <div class="status-icon warning-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          <line x1="12" y1="9" x2="12" y2="13" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+      </div>
+      <div class="status-title warning-text">Already Checked In</div>
+      <div class="student-name">{{ student_name }}</div>
+      <div class="session-info">{{ subject }} · {{ department }}</div>
+      <div class="status-message">Your attendance for this subject has already been recorded today.</div>
+      <div class="confirm-badge duplicate">
+        <div class="badge-dot yellow"></div>
+        Already Present
+      </div>
+      <br>
+      <a href="/" class="home-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+        Go to Home
+      </a>
+    </div>
+
+    {% elif auto_checkin %}
+    <!-- Success State -->
+    <div class="checkin-card success">
+      <div class="status-icon success-icon" style="position: relative;">
+        <div class="pulse-ring"></div>
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      </div>
+      <div class="status-title success-text">Checked In!</div>
+      <div class="student-name">{{ student_name }}</div>
+      <div class="session-info">{{ subject }} · {{ department }}</div>
+      <div class="status-message">Your attendance has been marked successfully via QR code.</div>
+      <div class="confirm-badge present">
+        <div class="badge-dot green"></div>
+        Present
+      </div>
+      <br>
+      <a href="/" class="home-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+        Go to Home
+      </a>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="bottom-bar">AttendAI v2.0 &nbsp;·&nbsp; QR CHECK-IN</div>
+</body>
+
+</html>
