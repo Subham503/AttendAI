@@ -87,6 +87,7 @@ _qr_lock = threading.Lock()
 QR_EXPIRY_MINUTES = int(os.getenv("QR_EXPIRY_MINUTES", 15))
 
 
+
 def _cleanup_expired_qr_tokens():
     """Remove expired QR tokens. Called periodically by APScheduler."""
     now = datetime.now()
@@ -1092,8 +1093,12 @@ def generate_qr():
             'expires_at': expires_at,
         }
 
-    # Build check-in URL
-    checkin_url = f"{request.host_url}checkin/{token}"
+   
+    # Build check-in URL (avoid trusting Host header for public links)
+    base_url = os.getenv("PUBLIC_BASE_URL", request.host_url)
+    if not base_url.endswith('/'):
+        base_url += '/'
+    checkin_url = f"{base_url}checkin/{token}"
 
     # Generate QR image → base64 data URI
     qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=2)
@@ -1156,7 +1161,7 @@ def checkin(token):
 
     subject = qr_data['subject']
     token_department = qr_data.get('department')
-     if _normalize_scope_value(student.get('department')) != _normalize_scope_value(token_department):
+    if _normalize_scope_value(student.get('department')) != _normalize_scope_value(token_department):
          return render_template('checkin.html',
                                 error='This QR code is for a different department. Please ask your faculty for the correct QR.',
                                 auto_checkin=False)
