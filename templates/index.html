@@ -302,10 +302,9 @@
       justify-content: center;
     }
 
-    /* Row 2: 2 cards — slightly wider, centered */
+    /* Row 2: now 3 cards — full width same as row-1 */
     .nav-row.row-2 {
-      width: calc(66.66% + 11px);
-      /* matches 2/3 of row-1 + 1 gap */
+      width: 100%;
     }
 
     .nav-card {
@@ -428,6 +427,15 @@
       stroke: #b060ff;
     }
 
+    .icon-orange {
+      background: rgba(255, 140, 0, 0.08);
+      border: 1px solid rgba(255, 140, 0, 0.28);
+    }
+
+    .icon-orange svg {
+      stroke: #ff8c00;
+    }
+
     /* Card text */
     .card-label {
       font-family: 'Orbitron', monospace;
@@ -481,6 +489,10 @@
 
     .nav-row:nth-child(2) .nav-card:nth-child(2) {
       animation-delay: 0.50s;
+    }
+
+    .nav-row:nth-child(2) .nav-card:nth-child(3) {
+      animation-delay: 0.60s;
     }
 
     /* ── Corner decorations ── */
@@ -642,7 +654,24 @@
           <div class="card-label">Class Session</div>
           <div class="card-desc">Set professor, day &amp; time slot</div>
         </a>
+
+        <a href="/generate_qr" class="nav-card">
+          <div class="card-icon icon-orange">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="3" height="3" />
+              <line x1="21" y1="14" x2="21" y2="14.01" />
+              <line x1="21" y1="21" x2="21" y2="21.01" />
+              <line x1="17" y1="21" x2="17" y2="21.01" />
+            </svg>
+          </div>
+          <div class="card-label">QR Check-in</div>
+          <div class="card-desc">Generate or scan QR for attendance</div>
+        </a>
       </div>
+
 
     </div>
   </div>
