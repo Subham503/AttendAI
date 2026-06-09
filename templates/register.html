@@ -1558,6 +1558,11 @@
                 elapsed += INTERVAL;
                 try {
                     const r = await fetch('/retrain_status');
+                    if (r.status === 401) {
+                        clearInterval(poll);
+                        window.location.href = '/login';
+                        return;
+                    }
                     const j = await r.json();
                     if (!j.running) {
                         clearInterval(poll);
