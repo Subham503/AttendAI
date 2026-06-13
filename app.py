@@ -316,10 +316,11 @@ def retrain_in_background():
     _retrain_status is written only from this function (single writer) so
     CPython's GIL makes individual key assignments safe to read from Flask threads.
     """
-    if _retrain_lock.locked():
+    acquired = _retrain_lock.acquire(blocking=False)
+    if not acquired:
         print("[Retrain] Skipped — retrain already in progress.")
         return
-    with _retrain_lock:
+    try:
         _retrain_status['running'] = True
         try:
             _, label_map = train_model()
@@ -330,6 +331,8 @@ def retrain_in_background():
             print(f"[Retrain] Error: {e}")
         finally:
             _retrain_status['running'] = False
+    finally:
+        _retrain_lock.release()
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1020,7 +1023,11 @@ def retrain_status():
     """Returns background retrain state. Requires login."""
     if not session.get('logged_in'):
         return jsonify({'running': False, 'last_completed': 'unknown', 'student_count': 0}), 401
-    return jsonify(_retrain_status)
+    return jsonify({
+        'running': bool(_retrain_status.get('running')),
+        'last_completed': _retrain_status.get('last_completed', 'unknown'),
+        'student_count': int(_retrain_status.get('student_count') or 0),
+    })
 
 
 @app.route('/db_status')
