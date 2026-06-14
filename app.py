@@ -582,7 +582,7 @@ def register():
             'reg_no': reg_no,
             'department': department,
             'class': class_name,
-            'password': hashed_pwd.decode('utf-8')
+            'password': hashed_pwd.decode('utf-8'),
             'email': email or None
         }).execute()
     except Exception as e:
