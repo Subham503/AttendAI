@@ -1151,8 +1151,20 @@ def checkin(token):
 
     # Look up student
     reg_no = session.get('reg_no')
-    student_res = supabase_client.table('students').select('id, name, department, class').eq('reg_no', reg_no).execute()
-    student = student_res.data[0] if student_res.data else None
+    try:
+         student_res = supabase_with_retry(
+             lambda: supabase_client.table('students')
+                 .select('id, name, department, class')
+                 .eq('reg_no', reg_no)
+                 .execute()
+         )
+     except RuntimeError as e:
+         if 'DB_OPEN' in str(e):
+             return render_template('checkin.html',
+                                    error='Database temporarily unavailable. Please try again.',
+                                    auto_checkin=False)
+         raise
+     student = student_res.data[0] if student_res.data else None
 
     if not student:
         return render_template('checkin.html',
