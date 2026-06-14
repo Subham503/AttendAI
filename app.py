@@ -1181,8 +1181,6 @@ def checkin(token):
     now = datetime.now()
 
     # Duplicate check
-    existing = supabase_client.table('attendance').select('id').eq('student_id', student['id']).ilike('subject', subject).ilike('department', token_department).eq('date', str(now.date())).execute()
-
     try:
     existing = supabase_with_retry(
         lambda: supabase_client.table('attendance')
