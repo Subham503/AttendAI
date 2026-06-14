@@ -1190,7 +1190,7 @@ def checkin(token):
                 .ilike('department', token_department)
                 .eq('date', str(now.date()))
                 .execute()
-        )
+                )
     except RuntimeError:
         return render_template('checkin.html',
                                error='Database temporarily unavailable. Please try again.',
