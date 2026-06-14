@@ -1183,14 +1183,20 @@ def checkin(token):
     # Duplicate check
     existing = supabase_client.table('attendance').select('id').eq('student_id', student['id']).ilike('subject', subject).ilike('department', token_department).eq('date', str(now.date())).execute()
 
-    if existing.data:
+    try:
+    existing = supabase_with_retry(
+        lambda: supabase_client.table('attendance')
+            .select('id')
+            .eq('student_id', student['id'])
+            .ilike('subject', subject)
+            .ilike('department', token_department)
+            .eq('date', str(now.date()))
+            .execute()
+    )
+    except RuntimeError:
         return render_template('checkin.html',
-                               error=None,
-                               auto_checkin=True,
-                               already_marked=True,
-                               student_name=student['name'],
-                               subject=subject,
-                               department=qr_data['department'])
+                           error='Database temporarily unavailable. Please try again.',
+                           auto_checkin=False)
 
     # Mark attendance
     try:
