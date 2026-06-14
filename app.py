@@ -1094,7 +1094,7 @@ def generate_qr():
         }
 
    
-    # Build check-in URL (avoid trusting Host header for public links)
+    # Build check-in URL. Prefer PUBLIC_BASE_URL in production; otherwise fall back to request.host_url (dev only).
     base_url = os.getenv("PUBLIC_BASE_URL", request.host_url)
     if not base_url.endswith('/'):
         base_url += '/'
