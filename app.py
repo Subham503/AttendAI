@@ -37,6 +37,7 @@ if not secret_key:
     raise RuntimeError("SECRET_KEY is required. Set a secret key in .env before starting the app.")
 
 app.secret_key = secret_key
+init_mail(app)
 # Session timeout configuration
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(
     minutes=int(os.getenv("SESSION_TIMEOUT_MINUTES", 30))
@@ -70,7 +71,20 @@ limiter = Limiter(
     default_limits=["200 per day", "50 per hour"],
 )
 
+# ===== Low Attendance Alert Configuration =====
+LOW_ATTENDANCE_THRESHOLD = float(
+    os.getenv("LOW_ATTENDANCE_THRESHOLD", 75)
+)
 
+ALERT_SCHEDULE_DAY = os.getenv(
+    "ALERT_SCHEDULE_DAY", "mon"
+)
+
+ALERT_SCHEDULE_HOUR = int(
+    os.getenv("ALERT_SCHEDULE_HOUR", 8)
+)
+
+# ===== Supabase =====
 supabase_client = create_client(
     os.getenv("SUPABASE_URL"),
     os.getenv("SUPABASE_KEY")
@@ -874,6 +888,30 @@ def attendance():
 
     return render_template("attendance.html", data=data)
 
+def scheduled_attendance_alert_job():
+    """Automatically send low-attendance alerts."""
+    print("Running scheduled attendance alerts...")
+
+    try:
+        students = supabase_client.table("students").select("*").execute()
+
+        total_alerts = 0
+
+        for student in (students.data or []):
+            if student.get("email"):
+                alerts = send_low_attendance_alert(
+                    app,
+                    supabase_client,
+                    student,
+                    LOW_ATTENDANCE_THRESHOLD
+                )
+                total_alerts += len(alerts)
+
+        print(f"Attendance alert job complete. {total_alerts} alerts sent.")
+
+    except Exception as e:
+        print(f"Attendance alert job failed: {e}")
+
 # ================= SCHEDULER SETUP =================
 scheduler = BackgroundScheduler()
 
@@ -901,8 +939,21 @@ def weekly_report_job():
         print(f"Error in weekly report job: {e}")
 
 # Run every Friday at 17:00 (5 PM)
-scheduler.add_job(func=weekly_report_job, trigger="cron", day_of_week='fri', hour=17, minute=0)
-scheduler.add_job(func=_cleanup_expired_qr_tokens, trigger="interval", minutes=5, id="qr_cleanup")
+scheduler.add_job(
+    func=weekly_report_job, trigger="cron", day_of_week='fri', hour=17, minute=0)
+
+scheduler.add_job(
+    func=scheduled_attendance_alert_job,
+     trigger="cron",
+    day_of_week=ALERT_SCHEDULE_DAY,
+    hour=ALERT_SCHEDULE_HOUR,
+    minute=0,
+    id="attendance_alerts"
+)
+
+scheduler.add_job(
+    func=_cleanup_expired_qr_tokens, trigger="interval", minutes=5, id="qr_cleanup")
+
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown(wait=False))
 
@@ -1006,7 +1057,8 @@ def check_attendance_alerts():
     if not session.get('logged_in') or session.get('role') != 'admin':
         return jsonify({'error': 'Unauthorized'}), 403
 
-    threshold = float(request.json.get('threshold', 75.0))
+    threshold = float(
+        request.json.get('threshold', LOW_ATTENDANCE_THRESHOLD))
 
     students = supabase_client.table('students').select('*').execute()
 
@@ -1165,13 +1217,13 @@ def checkin(token):
                  .eq('reg_no', reg_no)
                  .execute()
          )
-     except RuntimeError as e:
+    except RuntimeError as e:
          if 'DB_OPEN' in str(e):
              return render_template('checkin.html',
                                     error='Database temporarily unavailable. Please try again.',
                                     auto_checkin=False)
          raise
-     student = student_res.data[0] if student_res.data else None
+    student = student_res.data[0] if student_res.data else None
 
     if not student:
         return render_template('checkin.html',
