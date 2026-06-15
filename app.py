@@ -27,7 +27,7 @@ import qrcode
 # Reg-no must be purely alphanumeric with optional hyphens/underscores,
 # 2-30 characters. Rejects any path traversal sequence (dots, slashes, etc.).
 _REG_NO_RE = re.compile(r'^[A-Z0-9][A-Z0-9_-]{1,29}$')
-
+_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 # Load environment variables
 load_dotenv()
 
@@ -381,6 +381,8 @@ def require_login():
 # ================= HOME — protected =================
 @app.route('/')
 def index():
+    if session.get('role') == 'student':
+        return redirect('/student_dashboard')
     return render_template("index.html")
 
 # ================= LOGIN PAGE =================
@@ -474,28 +476,47 @@ def student_dashboard():
     if not session.get('logged_in') or session.get('role') != 'student':
         return redirect('/login')
     reg_no = session.get('reg_no')
-
+ 
     student_res = supabase_client.table('students').select('id').eq('reg_no', reg_no).execute()
     student_id = student_res.data[0]['id'] if student_res.data else None
-
+ 
+    records = []
+    subject_stats = []
+ 
     if student_id:
-        records_res = supabase_client.table('attendance').select('subject, date, time, status').eq('student_id', student_id).order('date', desc=True).order('time', desc=True).execute()
+        records_res = (
+            supabase_client.table('attendance')
+            .select('subject, date, time, status')
+            .eq('student_id', student_id)
+            .order('date', desc=True)
+            .order('time', desc=True)
+            .execute()
+        )
         records = [(r['subject'], r['date'], r['time'], r['status']) for r in (records_res.data or [])]
-
-        all_att_res = supabase_client.table('attendance').select('subject').eq('student_id', student_id).execute()
-        stats = {}
-        for r in (all_att_res.data or []):
-            stats[r['subject']] = stats.get(r['subject'], 0) + 1
-        subject_stats = [(subj, count) for subj, count in stats.items()]
-    else:
-        records = []
-        subject_stats = []
-
-    return render_template("student_dashboard.html",
-                           name=session.get('name'),
-                           reg_no=reg_no,
-                           records=records,
-                           subject_stats=subject_stats)
+ 
+        # Build per-subject present/total counts from status field
+        subject_counts = {}
+        for subject, _date, _time, status in records:
+            counts = subject_counts.setdefault(subject, {'present': 0, 'total': 0})
+            counts['total'] += 1
+            if status == 'Present':
+                counts['present'] += 1
+ 
+        for subject, counts in subject_counts.items():
+            present = counts['present']
+            total = counts['total']
+            pct = round((present / total) * 100) if total else 0
+            subject_stats.append((subject, present, total, pct))
+ 
+        subject_stats.sort(key=lambda x: x[0])
+ 
+    return render_template(
+        "student_dashboard.html",
+        name=session.get('name'),
+        reg_no=reg_no,
+        records=records,
+        subject_stats=subject_stats,
+    )
 
 # ================= CLASS SESSION =================
 @app.route('/session', methods=['GET', 'POST'])
@@ -526,10 +547,14 @@ def register():
     department = sanitize_text_field(data.get('department', '')).upper()
     class_name = sanitize_text_field(data.get('class_name', ''))
     password   = data.get('password', '').strip()
+    email      = sanitize_text_field(data.get('email', '')).lower()
     frames     = data.get('frames', [])
 
     if not all([name, reg_no, department, class_name, password]):
         return jsonify({'success': False, 'message': 'Missing required fields.'})
+
+    if email and not _EMAIL_RE.match(email):
+        return jsonify({'success': False, 'message': 'Invalid email format.'})
 
     # Layer 1: validate reg_no format — only uppercase letters, digits,
     # hyphens, and underscores are allowed (2-30 chars). This rejects any
@@ -586,7 +611,8 @@ def register():
             'reg_no': reg_no,
             'department': department,
             'class': class_name,
-            'password': hashed_pwd.decode('utf-8')
+            'password': hashed_pwd.decode('utf-8'),
+            'email': email or None
         }).execute()
     except Exception as e:
         return jsonify({'success': False, 'message': f'DB error: {str(e)}'})

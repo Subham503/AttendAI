@@ -1009,6 +1009,21 @@
                             </div>
                         </div>
                     </div>
+                    <div class="form-row">
+                        <div class="field">
+                            <label>Email <span style="color:rgba(0,255,247,0.3);">(optional)</span></label>
+                            <div class="input-wrap" id="wrap-email">
+                                <input type="email" name="email" id="inp-email"
+                                    placeholder="e.g. arjun@college.edu"
+                                    oninput="validateEmail(this)" />
+                                <div class="check-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5"
+                                        stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg></div>
+                            </div>
+                            <div class="field-error" id="err-email">Enter a valid email address</div>
+                        </div>
+                    </div>
                     <div class="form-row cols-2">
                         <div class="field">
                             <label>Register No. <span class="req">*</span></label>
@@ -1380,6 +1395,7 @@
             const year = document.getElementById('inp-year').value;
             const pwd = document.getElementById('inp-pwd').value;
             const cpwd = document.getElementById('inp-cpwd').value;
+            const email = document.getElementById('inp-email').value.trim();
 
             if (!name || !reg_no || !dept || !cls || !year) {
                 showToast('Please fill all required fields.', true); return;
@@ -1402,8 +1418,7 @@
                 const response = await fetch('/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, reg_no, department: dept, class_name: cls, year, password: pwd, frames: capturedFrames })
-                });
+                    body: JSON.stringify({ name, reg_no, department: dept, class_name: cls, year, password: pwd, email, frames: capturedFrames })                });
                 const result = await response.json();
                 if (result.success) {
                     showToast(`✅ ${name} enrolled successfully!`, false);
@@ -1460,6 +1475,24 @@
                 el.classList.add('error-field'); err.classList.add('show');
             }
             updateSubmitBtn();
+        }
+        function validateEmail(el) {
+            const wrap = document.getElementById('wrap-email');
+            const err = document.getElementById('err-email');
+            const re = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+            if (el.value.trim() === '') {
+                wrap.classList.remove('valid');
+                el.classList.remove('valid', 'error-field');
+                err.classList.remove('show');
+                return;
+            }
+            if (re.test(el.value.trim())) {
+                wrap.classList.add('valid'); el.classList.add('valid');
+                el.classList.remove('error-field'); err.classList.remove('show');
+            } else {
+                wrap.classList.remove('valid'); el.classList.remove('valid');
+                el.classList.add('error-field'); err.classList.add('show');
+            }
         }
 
         function toggleField(id) {
