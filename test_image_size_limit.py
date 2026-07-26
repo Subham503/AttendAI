@@ -363,7 +363,7 @@ class MarkAttendanceSizeLimitTest(unittest.TestCase):
         # no faces, so the endpoint responds with the "no face" message
         # (200 with success=False). The point of this test is that the
         # request is NOT rejected with 413/400.
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status_code, 400)
         body = resp.get_json()
         self.assertFalse(body["success"])
         # Either "No face detected" or the liveness failure — both are
@@ -403,7 +403,7 @@ class RegisterFrameCountLimitTest(unittest.TestCase):
         finally:
             attend_app.MAX_REGISTER_FRAMES = orig_max
 
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status_code, 400)
         body = resp.get_json()
         self.assertFalse(body["success"])
         self.assertIn("frames", body["message"].lower())
@@ -454,6 +454,181 @@ class GlobalContentLengthTest(unittest.TestCase):
         self.assertFalse(body["success"])
         self.assertIn("large", body["message"].lower())
 
+# ---------------------------------------------------------------------
+# Review fixes: 400 status codes + 25 MB default + no duplicate loop
+# ---------------------------------------------------------------------
+
+
+class RegisterValidationStatusCodesTest(unittest.TestCase):
+    """Verify that all /register validation failures return HTTP 400
+    (not 200 with success:false)."""
+
+    def setUp(self):
+        attend_app.app.config.update(TESTING=True, SECRET_KEY="test")
+        self.client = attend_app.app.test_client()
+        attend_app.supabase_client = _FakeSupabase()
+
+    def test_missing_required_fields_returns_400(self):
+        resp = self.client.post("/register", json={})
+        self.assertEqual(resp.status_code, 400)
+        body = resp.get_json()
+        self.assertFalse(body["success"])
+
+    def test_invalid_email_returns_400(self):
+        resp = self.client.post("/register", json={
+            "name": "Test", "reg_no": "STU001", "department": "CSE",
+            "class_name": "A", "password": "secret",
+            "email": "not-an-email",
+        })
+        self.assertEqual(resp.status_code, 400)
+        body = resp.get_json()
+        self.assertFalse(body["success"])
+        self.assertIn("email", body["message"].lower())
+
+    def test_invalid_reg_no_returns_400(self):
+        resp = self.client.post("/register", json={
+            "name": "Test", "reg_no": "../etc/passwd", "department": "CSE",
+            "class_name": "A", "password": "secret",
+        })
+        self.assertEqual(resp.status_code, 400)
+        body = resp.get_json()
+        self.assertFalse(body["success"])
+
+    def test_too_few_frames_returns_400(self):
+        resp = self.client.post("/register", json={
+            "name": "Test", "reg_no": "STU001", "department": "CSE",
+            "class_name": "A", "password": "secret",
+            "frames": ["data:image/jpeg;base64,AAAA"] * 5,  # < 20
+        })
+        self.assertEqual(resp.status_code, 400)
+        body = resp.get_json()
+        self.assertFalse(body["success"])
+        self.assertIn("frames", body["message"].lower())
+
+
+class MarkAttendanceValidationStatusCodesTest(unittest.TestCase):
+    """Verify that /mark_attendance validation failures return proper HTTP
+    status codes (400/503), not 200."""
+
+    def setUp(self):
+        attend_app.app.config.update(TESTING=True, SECRET_KEY="test")
+        self.client = attend_app.app.test_client()
+        attend_app.supabase_client = _FakeSupabase()
+        self._orig_imdecode = attend_app.cv2.imdecode
+        attend_app.cv2.imdecode = lambda *a, **k: _DecodedFrame()
+        self._orig_cc = attend_app.cv2.CascadeClassifier
+        attend_app.cv2.CascadeClassifier = _FakeCascade
+
+    def tearDown(self):
+        attend_app.cv2.imdecode = self._orig_imdecode
+        attend_app.cv2.CascadeClassifier = self._orig_cc
+
+    def _login_as_faculty(self):
+        with self.client.session_transaction() as sess:
+            sess["logged_in"] = True
+            sess["role"] = "faculty"
+            sess["name"] = "Prof Alice"
+            sess["faculty_id"] = "prof_alice"
+            sess["faculty_department"] = "cse"
+            sess["faculty_subjects"] = ["math"]
+            sess[attend_app.CLASS_CONTEXT_SESSION_KEY] = {
+                "subject": "math",
+                "department": "cse",
+            }
+
+    def test_model_not_trained_returns_503(self):
+        self._login_as_faculty()
+        attend_app.global_label_map = {}  # untrained
+        resp = self.client.post(
+            "/mark_attendance",
+            json={"image": _b64(b"tiny")},
+        )
+        self.assertEqual(resp.status_code, 503)
+        body = resp.get_json()
+        self.assertFalse(body["success"])
+
+    def test_liveness_failure_returns_400(self):
+        self._login_as_faculty()
+        attend_app.global_label_map = {0: ("s1", "Alice", "STU001", "cse", "A")}
+        # Override liveness to fail
+        import liveness
+        orig = liveness.verify_liveness
+        liveness.verify_liveness = lambda *a, **k: False
+        try:
+            resp = self.client.post(
+                "/mark_attendance",
+                json={"image": _b64(b"tiny")},
+            )
+        finally:
+            liveness.verify_liveness = orig
+        self.assertEqual(resp.status_code, 400)
+
+    def test_no_face_detected_returns_400(self):
+        self._login_as_faculty()
+        attend_app.global_label_map = {0: ("s1", "Alice", "STU001", "cse", "A")}
+        # _FakeCascade.detectMultiScale returns () → no faces
+        resp = self.client.post(
+            "/mark_attendance",
+            json={"image": _b64(b"tiny")},
+        )
+        self.assertEqual(resp.status_code, 400)
+
+
+class GlobalContentLengthDefaultTest(unittest.TestCase):
+    """Verify that the default MAX_CONTENT_LENGTH is 25 MB (enough for
+    /register's 20-frame payload)."""
+
+    def test_default_is_25mb(self):
+        # Reload the app module to pick up the default (no env override).
+        import importlib
+        importlib.reload(attend_app)
+        self.assertGreaterEqual(
+            attend_app.app.config["MAX_CONTENT_LENGTH"],
+            25 * 1024 * 1024,
+        )
+
+
+class RegisterNoDuplicateLoopTest(unittest.TestCase):
+    """Verify that /register runs the frame loop exactly once (no duplicate
+    old+new logic). We check this by counting how many times
+    decode_image_payload is called for a given number of frames."""
+
+    def setUp(self):
+        attend_app.app.config.update(TESTING=True, SECRET_KEY="test")
+        self.client = attend_app.app.test_client()
+        attend_app.supabase_client = _FakeSupabase()
+        self._orig_imdecode = attend_app.cv2.imdecode
+        attend_app.cv2.imdecode = lambda *a, **k: _DecodedFrame()
+        self._orig_cc = attend_app.cv2.CascadeClassifier
+        attend_app.cv2.CascadeClassifier = _FakeCascade
+
+    def tearDown(self):
+        attend_app.cv2.imdecode = self._orig_imdecode
+        attend_app.cv2.CascadeClassifier = self._orig_cc
+
+    def test_decode_called_once_per_frame(self):
+        # Patch decode_image_payload to count calls.
+        orig_decode = attend_app.decode_image_payload
+        call_count = [0]
+
+        def counting_decode(image_data):
+            call_count[0] += 1
+            return orig_decode(image_data)
+
+        attend_app.decode_image_payload = counting_decode
+        try:
+            # 20 frames — the minimum. Each should be decoded exactly once.
+            frames = [_b64(b"frame_data") for _ in range(20)]
+            self.client.post("/register", json={
+                "name": "Test", "reg_no": "STU001", "department": "CSE",
+                "class_name": "A", "password": "secret",
+                "frames": frames,
+            })
+        finally:
+            attend_app.decode_image_payload = orig_decode
+
+        # If the old duplicate loop were still present, this would be 40.
+        self.assertEqual(call_count[0], 20)
 
 if __name__ == "__main__":
     unittest.main()
