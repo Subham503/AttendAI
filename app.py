@@ -73,12 +73,16 @@ limiter = Limiter(
 
 
 # ===== Request body size limit (DoS hardening, issue #50) =====
-# Reject any request body larger than 5 MB at the Flask/Werkzeug layer
+# Reject any request body larger than 25 MB at the Flask/Werkzeug layer
 # BEFORE the JSON parser or base64 decoder ever touches it. This protects
 # every POST endpoint (not just /mark_attendance) from memory-exhaustion
 # attacks via oversized payloads.
+#
+# 25 MB covers the legitimate /register use case: 20 frames at 720p JPEG
+# (~100-400 KB each base64-encoded = 2-8 MB total) with comfortable headroom.
+# The previous 5 MB default returned 413 on valid registrations.
 app.config["MAX_CONTENT_LENGTH"] = int(
-    os.getenv("MAX_CONTENT_LENGTH", 5 * 1024 * 1024)  # 5 MB default
+    os.getenv("MAX_CONTENT_LENGTH", 25 * 1024 * 1024)  # 25 MB default
 )
 
 # ===== Image payload size limits (issue #50) =====
@@ -649,7 +653,6 @@ def class_session():
         return redirect(f'/camera?subject={subject}&department={department}')
     return render_template("class_session.html")
 
-# ================= REGISTER =================
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'GET':
@@ -664,11 +667,13 @@ def register():
     email      = sanitize_text_field(data.get('email', '')).lower()
     frames     = data.get('frames', [])
 
+    # ── Validation (all return proper 400 status codes) ─────────────────
+
     if not all([name, reg_no, department, class_name, password]):
-        return jsonify({'success': False, 'message': 'Missing required fields.'})
+        return jsonify({'success': False, 'message': 'Missing required fields.'}), 400
 
     if email and not _EMAIL_RE.match(email):
-        return jsonify({'success': False, 'message': 'Invalid email format.'})
+        return jsonify({'success': False, 'message': 'Invalid email format.'}), 400
 
     # Layer 1: validate reg_no format — only uppercase letters, digits,
     # hyphens, and underscores are allowed (2-30 chars). This rejects any
@@ -678,7 +683,7 @@ def register():
         return jsonify({
             'success': False,
             'message': 'Invalid registration number. Use only letters, digits, hyphens, and underscores (2-30 characters).'
-        })
+        }), 400
 
     # Issue #50: cap the number of frames per request so a malicious client
     # cannot flood the server with thousands of oversized images in a single
@@ -688,15 +693,17 @@ def register():
         return jsonify({
             'success': False,
             'message': f'Too many frames. Maximum is {MAX_REGISTER_FRAMES}.'
-        })
+        }), 400
 
     if len(frames) < 20:
-        return jsonify({'success': False, 'message': f'Need 20 frames, got {len(frames)}.'})
+        return jsonify({'success': False, 'message': f'Need 20 frames, got {len(frames)}.'}), 400
+
+    # ── Processing ───────────────────────────────────────────────────────
 
     hashed_pwd = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
 
     images_dir = Path("images").resolve()
-    images_dir.mkdir(parents=True, exist_ok=True)  # replaces the old os.makedirs call
+    images_dir.mkdir(parents=True, exist_ok=True)
 
     face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
     saved = 0
@@ -729,62 +736,7 @@ def register():
             print(f"Frame {i} error: {e}")
 
     if saved == 0:
-        return jsonify({'success': False, 'message': 'No face detected in any frame. Retry in better lighting.'})
-
-    if not all([name, reg_no, department, class_name, password]):
-        return jsonify({'success': False, 'message': 'Missing required fields.'})
-
-    if email and not _EMAIL_RE.match(email):
-        return jsonify({'success': False, 'message': 'Invalid email format.'})
-
-    # Layer 1: validate reg_no format — only uppercase letters, digits,
-    # hyphens, and underscores are allowed (2-30 chars). This rejects any
-    # path traversal sequence such as "../", "//", or null bytes before the
-    # value ever reaches the filesystem.
-    if not _REG_NO_RE.match(reg_no):
-        return jsonify({
-            'success': False,
-            'message': 'Invalid registration number. Use only letters, digits, hyphens, and underscores (2-30 characters).'
-        })
-
-    if len(frames) < 20:
-        return jsonify({'success': False, 'message': f'Need 20 frames, got {len(frames)}.'})
-
-    hashed_pwd = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-
-    images_dir = Path("images").resolve()
-    images_dir.mkdir(parents=True, exist_ok=True)  # replaces the old os.makedirs call
-
-    face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
-    saved = 0
-
-    for i, frame_data in enumerate(frames):
-        try:
-            header, encoded = frame_data.split(',', 1)
-            img_bytes = base64.b64decode(encoded)
-            np_arr    = np.frombuffer(img_bytes, np.uint8)
-            frame     = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            if frame is None:
-                continue
-            gray     = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            detected = face_cascade.detectMultiScale(gray, 1.3, 5)
-            if len(detected) == 0:
-                continue
-
-            # Layer 2: path confinement — resolve the absolute path and
-            # confirm it stays inside images_dir before writing anything.
-            photo_path = (images_dir / f"{reg_no}_{saved + 1}.jpg").resolve()
-            if not photo_path.is_relative_to(images_dir):
-                print(f"Path traversal attempt blocked for reg_no={reg_no!r}")
-                continue
-
-            cv2.imwrite(str(photo_path), frame)
-            saved += 1
-        except Exception as e:
-            print(f"Frame {i} error: {e}")
-
-    if saved == 0:
-        return jsonify({'success': False, 'message': 'No face detected in any frame. Retry in better lighting.'})
+        return jsonify({'success': False, 'message': 'No face detected in any frame. Retry in better lighting.'}), 400
 
     try:
         supabase_client.table('students').insert({
@@ -796,13 +748,12 @@ def register():
             'email': email or None
         }).execute()
     except Exception as e:
-        return jsonify({'success': False, 'message': f'DB error: {str(e)}'})
+        return jsonify({'success': False, 'message': f'DB error: {str(e)}'}), 500
 
     # Kick off background retrain — response returns immediately
     threading.Thread(target=retrain_in_background, daemon=True).start()
 
     return jsonify({'success': True, 'message': f'Enrolled {name} with {saved} face photos.'})
-
 # ================= CAMERA PAGE =================
 @app.route('/camera')
 def camera():
@@ -915,7 +866,7 @@ def mark_attendance():
         return jsonify({'success': False, 'message': 'Access denied for this department or subject'}), 403
 
     if not global_label_map:
-        return jsonify({'success': False, 'message': 'Model not trained. Admin must run /retrain first.'})
+        return jsonify({'success': False, 'message': 'Model not trained. Admin must run /retrain first.'}), 503
 
     # Issue #50: enforce size limits BEFORE base64 decode / cv2.imdecode
     # to prevent memory-exhaustion DoS via oversized image payloads.
@@ -926,14 +877,14 @@ def mark_attendance():
 
     # --- Server-Side Liveness Verification ---
     if not verify_liveness(frame):
-        return jsonify({'success': False, 'message': 'Liveness check failed. Spoofing detected or no clear face.'})
+        return jsonify({'success': False, 'message': 'Liveness check failed. Spoofing detected or no clear face.'}), 400
 
     face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
     gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
     if len(faces) == 0:
-        return jsonify({'success': False, 'message': 'No face detected. Position face clearly.'})
+        return jsonify({'success': False, 'message': 'No face detected. Position face clearly.'}), 400
 
     CONFIDENCE_THRESHOLD = 60
     marked_names  = []
