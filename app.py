@@ -811,18 +811,25 @@ def mark_attendance():
             else:
                 # ── Layer 1+2: retry + circuit breaker on INSERT ──
                 try:
-                    supabase_with_retry(
-                        lambda: supabase_client.table('attendance').insert({
-                            'student_id': student_id,
-                            'name':       name,
-                            'department': dept,
-                            'class':      cls,
-                            'subject':    subject,
-                            'date':       str(now.date()),
-                            'time':       str(now.time()),
-                            'status':     'Present'
-                        }).execute()
-                    )
+                    insert_result = supabase_with_retry(
+                    lambda: supabase_client.table("attendance").insert({
+                     "student_id": student_id,
+                      "name": name,
+                     "department": dept,
+                       "class": cls,
+                        "subject": subject,
+                        "date": str(now.date()),
+                        "time": str(now.time()),
+                             "status": "Present",
+                          }).execute()
+                           )
+                    if insert_result.data:
+                         log_attendance_audit(
+                             attendance_id=insert_result.data[0]["id"],
+                             action="Create",
+                             previous_values=None,
+                             updated_values=insert_result.data[0],
+                         )
                     marked_names.append(name)
                 except RuntimeError as e:
                     if 'DB_OPEN' in str(e):
@@ -1121,6 +1128,13 @@ def delete(id):
     scope = _current_faculty_scope()
     if session.get('role') == 'faculty' and not _record_matches_faculty_scope(record, scope):
         return render_template('403.html'), 403
+
+    log_attendance_audit(
+     attendance_id=id,
+     action="Delete",
+     previous_values=record,
+     updated_values=None,
+    )
 
     supabase_client.table('attendance').delete().eq('id', id).execute()
     return redirect('/attendance')
