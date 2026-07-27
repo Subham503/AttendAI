@@ -71,6 +71,34 @@ limiter = Limiter(
     default_limits=["200 per day", "50 per hour"],
 )
 
+
+# ===== Request body size limit (DoS hardening, issue #50) =====
+# Reject any request body larger than 25 MB at the Flask/Werkzeug layer
+# BEFORE the JSON parser or base64 decoder ever touches it. This protects
+# every POST endpoint (not just /mark_attendance) from memory-exhaustion
+# attacks via oversized payloads.
+#
+# 25 MB covers the legitimate /register use case: 20 frames at 720p JPEG
+# (~100-400 KB each base64-encoded = 2-8 MB total) with comfortable headroom.
+# The previous 5 MB default returned 413 on valid registrations.
+app.config["MAX_CONTENT_LENGTH"] = int(
+    os.getenv("MAX_CONTENT_LENGTH", 25 * 1024 * 1024)  # 25 MB default
+)
+
+# ===== Image payload size limits (issue #50) =====
+# Hard cap on a single decoded image (bytes) and on the base64 data-URI
+# string that carries it. base64 expands binary by ~33%, so the encoded
+# string limit is 1.4x the decoded limit. Both checks run BEFORE
+# cv2.imdecode() so an attacker cannot force OpenCV to allocate a huge
+# framebuffer.
+MAX_IMAGE_BYTES = int(os.getenv("MAX_IMAGE_BYTES", 2 * 1024 * 1024))  # 2 MB decoded
+MAX_IMAGE_DATA_URI_BYTES = int(
+    os.getenv("MAX_IMAGE_DATA_URI_BYTES", int(MAX_IMAGE_BYTES * 1.4))  # ~2.8 MB encoded
+)
+# /register accepts an array of frames; cap both the per-frame size and the
+# total frame count so a single request cannot flood the server.
+MAX_REGISTER_FRAMES = int(os.getenv("MAX_REGISTER_FRAMES", 30))
+
 # ===== Low Attendance Alert Configuration =====
 LOW_ATTENDANCE_THRESHOLD = float(
     os.getenv("LOW_ATTENDANCE_THRESHOLD", 75)
@@ -123,6 +151,72 @@ def sanitize_text_field(value):
     text = re.sub(r"<[^>]*>", "", text)
     text = re.sub(r"[\x00-\x1f\x7f]", " ", text)
     return re.sub(r"\s+", " ", text).strip()
+
+def decode_image_payload(image_data):
+    """Decode a base64 data-URI image into an OpenCV frame with strict
+    size limits.
+
+    Security (issue #50): every size check runs BEFORE the heavy
+    ``base64.b64decode`` / ``cv2.imdecode`` calls so an attacker cannot
+    force the server to allocate a huge buffer. Returns ``(frame, error)``
+    where exactly one of the two is non-None:
+
+        * on success:  ``(frame, None)``
+        * on failure:  ``(None, (status_code, message))``
+
+    Args:
+        image_data: a string like ``"data:image/jpeg;base64,/9j/4AAQ..."``
+            or a raw base64 string. Anything falsy or non-string is rejected.
+
+    Enforced limits (configurable via env vars):
+        * ``MAX_IMAGE_DATA_URI_BYTES`` — max length of the encoded string.
+        * ``MAX_IMAGE_BYTES`` — max size of the decoded binary blob.
+    """
+    if not isinstance(image_data, str) or not image_data:
+        return None, (400, "No image provided.")
+
+    # Layer 1: reject oversized *encoded* strings before decoding.
+    if len(image_data) > MAX_IMAGE_DATA_URI_BYTES:
+        return None, (
+            413,
+            f"Image too large. Maximum encoded size is "
+            f"{MAX_IMAGE_DATA_URI_BYTES // 1024} KB.",
+        )
+
+    # Split optional ``data:...;base64,`` header. The header is mandatory
+    # for browser data URIs but tolerate raw base64 for non-browser clients.
+    encoded = image_data
+    if "," in image_data:
+        _header, encoded = image_data.split(",", 1)
+
+    # Layer 2: cap the decoded length. ``base64.b64decode`` with
+    # ``validate=True`` rejects non-alphabet characters so an attacker
+    # cannot smuggle in extra bytes via padding tricks.
+    try:
+        img_bytes = base64.b64decode(encoded, validate=True)
+    except Exception:
+        return None, (400, "Invalid base64 image data.")
+
+    if len(img_bytes) > MAX_IMAGE_BYTES:
+        return None, (
+            413,
+            f"Decoded image exceeds maximum allowed size of "
+            f"{MAX_IMAGE_BYTES // 1024} KB.",
+        )
+
+    # Layer 3: decode with OpenCV. ``imdecode`` is the real memory sink
+    # — it allocates a full framebuffer — so we only reach it after the
+    # byte-size checks above have passed.
+    try:
+        np_arr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    except Exception:
+        return None, (400, "Failed to decode image.")
+
+    if frame is None:
+        return None, (400, "Invalid image received.")
+
+    return frame, None
 
 
 def set_class_session_context(subject, department):
@@ -467,6 +561,17 @@ def too_many_requests(error):
         return jsonify({'success': False, 'message': 'Too many login attempts. Please wait a minute and try again.'}), 429
     return jsonify({'success': False, 'message': 'Too many requests.'}), 429
 
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    """Issue #50: return a clean JSON 413 when MAX_CONTENT_LENGTH is exceeded
+    so API clients (camera JS, register form, etc.) get a parseable error
+    instead of Werkzeug's default HTML response."""
+    limit_kb = app.config.get("MAX_CONTENT_LENGTH", 0) // 1024
+    return jsonify({
+        'success': False,
+        'message': f'Request body too large. Maximum size is {limit_kb} KB.'
+    }), 413
+
 # ================= LOGOUT =================
 @app.route('/logout')
 def logout():
@@ -548,13 +653,11 @@ def class_session():
         return redirect(f'/camera?subject={subject}&department={department}')
     return render_template("class_session.html")
 
-# ================= REGISTER =================
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'GET':
         return render_template("register.html")
 
-    import base64
     data = request.get_json(force=True, silent=True) or {}
     name       = sanitize_text_field(data.get('name', ''))
     reg_no     = data.get('reg_no', '').strip().upper()
@@ -564,11 +667,13 @@ def register():
     email      = sanitize_text_field(data.get('email', '')).lower()
     frames     = data.get('frames', [])
 
+    # ── Validation (all return proper 400 status codes) ─────────────────
+
     if not all([name, reg_no, department, class_name, password]):
-        return jsonify({'success': False, 'message': 'Missing required fields.'})
+        return jsonify({'success': False, 'message': 'Missing required fields.'}), 400
 
     if email and not _EMAIL_RE.match(email):
-        return jsonify({'success': False, 'message': 'Invalid email format.'})
+        return jsonify({'success': False, 'message': 'Invalid email format.'}), 400
 
     # Layer 1: validate reg_no format — only uppercase letters, digits,
     # hyphens, and underscores are allowed (2-30 chars). This rejects any
@@ -578,27 +683,41 @@ def register():
         return jsonify({
             'success': False,
             'message': 'Invalid registration number. Use only letters, digits, hyphens, and underscores (2-30 characters).'
-        })
+        }), 400
+
+    # Issue #50: cap the number of frames per request so a malicious client
+    # cannot flood the server with thousands of oversized images in a single
+    # POST. Combined with the global MAX_CONTENT_LENGTH this bounds the total
+    # memory pressure of any single /register call.
+    if not isinstance(frames, list) or len(frames) > MAX_REGISTER_FRAMES:
+        return jsonify({
+            'success': False,
+            'message': f'Too many frames. Maximum is {MAX_REGISTER_FRAMES}.'
+        }), 400
 
     if len(frames) < 20:
-        return jsonify({'success': False, 'message': f'Need 20 frames, got {len(frames)}.'})
+        return jsonify({'success': False, 'message': f'Need 20 frames, got {len(frames)}.'}), 400
+
+    # ── Processing ───────────────────────────────────────────────────────
 
     hashed_pwd = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
 
     images_dir = Path("images").resolve()
-    images_dir.mkdir(parents=True, exist_ok=True)  # replaces the old os.makedirs call
+    images_dir.mkdir(parents=True, exist_ok=True)
 
     face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
     saved = 0
 
     for i, frame_data in enumerate(frames):
+        # Issue #50: per-frame size validation via the shared helper. A
+        # single oversized frame is skipped rather than aborting the whole
+        # registration, so a flaky client doesn't waste the user's earlier
+        # good frames — but the oversized frame is never decoded.
+        frame, img_err = decode_image_payload(frame_data)
+        if img_err is not None:
+            print(f"Frame {i} rejected: {img_err[1]}")
+            continue
         try:
-            header, encoded = frame_data.split(',', 1)
-            img_bytes = base64.b64decode(encoded)
-            np_arr    = np.frombuffer(img_bytes, np.uint8)
-            frame     = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            if frame is None:
-                continue
             gray     = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             detected = face_cascade.detectMultiScale(gray, 1.3, 5)
             if len(detected) == 0:
@@ -617,7 +736,7 @@ def register():
             print(f"Frame {i} error: {e}")
 
     if saved == 0:
-        return jsonify({'success': False, 'message': 'No face detected in any frame. Retry in better lighting.'})
+        return jsonify({'success': False, 'message': 'No face detected in any frame. Retry in better lighting.'}), 400
 
     try:
         supabase_client.table('students').insert({
@@ -629,13 +748,12 @@ def register():
             'email': email or None
         }).execute()
     except Exception as e:
-        return jsonify({'success': False, 'message': f'DB error: {str(e)}'})
+        return jsonify({'success': False, 'message': f'DB error: {str(e)}'}), 500
 
     # Kick off background retrain — response returns immediately
     threading.Thread(target=retrain_in_background, daemon=True).start()
 
     return jsonify({'success': True, 'message': f'Enrolled {name} with {saved} face photos.'})
-
 # ================= CAMERA PAGE =================
 @app.route('/camera')
 def camera():
@@ -748,27 +866,25 @@ def mark_attendance():
         return jsonify({'success': False, 'message': 'Access denied for this department or subject'}), 403
 
     if not global_label_map:
-        return jsonify({'success': False, 'message': 'Model not trained. Admin must run /retrain first.'})
+        return jsonify({'success': False, 'message': 'Model not trained. Admin must run /retrain first.'}), 503
 
-    import base64
-    header, encoded = image_data.split(',', 1)
-    img_bytes = base64.b64decode(encoded)
-    np_arr    = np.frombuffer(img_bytes, np.uint8)
-    frame     = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-    if frame is None:
-        return jsonify({'success': False, 'message': 'Invalid image received'})
+    # Issue #50: enforce size limits BEFORE base64 decode / cv2.imdecode
+    # to prevent memory-exhaustion DoS via oversized image payloads.
+    frame, img_err = decode_image_payload(image_data)
+    if img_err is not None:
+        status_code, message = img_err
+        return jsonify({'success': False, 'message': message}), status_code
 
     # --- Server-Side Liveness Verification ---
     if not verify_liveness(frame):
-        return jsonify({'success': False, 'message': 'Liveness check failed. Spoofing detected or no clear face.'})
+        return jsonify({'success': False, 'message': 'Liveness check failed. Spoofing detected or no clear face.'}), 400
 
     face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
     gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
     if len(faces) == 0:
-        return jsonify({'success': False, 'message': 'No face detected. Position face clearly.'})
+        return jsonify({'success': False, 'message': 'No face detected. Position face clearly.'}), 400
 
     CONFIDENCE_THRESHOLD = 60
     marked_names  = []
