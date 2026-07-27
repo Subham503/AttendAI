@@ -219,6 +219,48 @@ Export CSV → downloadable attendance report
 
 ---
 
+---
+
+## 📸 Screenshots
+
+### 🔐 Login Page
+
+![Login Page](assets/screenshots/login-page.png)
+
+Secure login interface for Admin, Faculty, and Student users.
+
+### 📝 Registration Page
+
+![Registration Page](assets/screenshots/register.png)
+
+Student registration page with webcam-based face capture.
+
+### 🎥 Camera Interface
+
+![Camera Interface](assets/screenshots/camera.png)
+
+Captures student faces for registration and attendance.
+
+### 📚 Class Session
+
+![Class Session](assets/screenshots/class-session.png)
+
+Faculty can create and manage attendance sessions.
+
+### 📷 Attendance Scanner
+
+![Attendance Scanner](assets/screenshots/scanner.png)
+
+Real-time face recognition used for marking attendance.
+
+### 🖥️ Dashboard
+
+![Dashboard](assets/screenshots/dashboard.png)
+
+Displays attendance information and system overview.
+
+---
+
 ## 🗺️ Project Workflow
 
 [![View Flowchart](https://img.shields.io/badge/Figma-View%20Flowchart-purple?logo=figma)](https://www.figma.com/board/0sZlZNlQV1VcEwg6zwWtAL/AttendAI-%E2%80%94-Project-Workflow?node-id=0-1&p=f&t=MwvKWv2TLTeE7Iut-0)
