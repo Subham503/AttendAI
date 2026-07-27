@@ -19,3 +19,29 @@ CREATE TABLE IF NOT EXISTS attendance_audit_logs (
 
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Enable Row Level Security
+ALTER TABLE attendance_audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- Prevent updates
+CREATE POLICY "no_update_audit"
+ON attendance_audit_logs
+FOR UPDATE
+USING (false);
+
+-- Prevent deletes
+CREATE POLICY "no_delete_audit"
+ON attendance_audit_logs
+FOR DELETE
+USING (false);
+ALTER TABLE attendance_audit_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "no_delete_audit"
+ON attendance_audit_logs
+FOR DELETE
+USING (false);
+
+CREATE POLICY "no_update_audit"
+ON attendance_audit_logs
+FOR UPDATE
+USING (false);
