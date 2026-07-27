@@ -253,8 +253,8 @@ def log_attendance_audit(
     try:
         supabase_client.table("attendance_audit_logs").insert({
             "attendance_id": attendance_id,
-            "user_id": str(session.get("user_id")),
-            "user_role": session.get("role"),
+            "user_id": str(session.get("user_id") or session.get("name") or "unknown"),
+            "user_role": str(session.get("role") or "unknown"),
             "action": action,
             "previous_values": previous_values,
             "updated_values": updated_values,
@@ -262,8 +262,8 @@ def log_attendance_audit(
             "ip_address": request.remote_addr,
         }).execute()
 
-    except Exception as e:
-        print(f"Audit log error: {e}")
+    except Exception:
+      app.logger.exception("Audit log failed")
 
 # Global model and label map for efficiency
 global_recognizer = cv2.face.LBPHFaceRecognizer_create()
