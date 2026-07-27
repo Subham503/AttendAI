@@ -242,6 +242,29 @@ def _fetch_scoped_attendance(select_columns="*"):
     result = query.execute()
     return result.data or []
 
+def log_attendance_audit(
+    attendance_id,
+    action,
+    previous_values=None,
+    updated_values=None,
+):
+    """Create an immutable audit log entry."""
+
+    try:
+        supabase_client.table("attendance_audit_logs").insert({
+            "attendance_id": attendance_id,
+            "user_id": str(session.get("user_id")),
+            "user_role": session.get("role"),
+            "action": action,
+            "previous_values": previous_values,
+            "updated_values": updated_values,
+            "session_id": session.get(CLASS_CONTEXT_SESSION_KEY),
+            "ip_address": request.remote_addr,
+        }).execute()
+
+    except Exception as e:
+        print(f"Audit log error: {e}")
+
 # Global model and label map for efficiency
 global_recognizer = cv2.face.LBPHFaceRecognizer_create()
 global_label_map = {}
@@ -790,70 +813,84 @@ def mark_attendance():
             try:
                 existing = supabase_with_retry(
                     lambda sid=student_id: supabase_client
-                        .table('attendance')
-                        .select('id')
-                        .eq('student_id', sid)
-                        .ilike('subject', subject)
-                        .eq('date', str(now.date()))
+                        .table("attendance")
+                        .select("id")
+                        .eq("student_id", sid)
+                        .ilike("subject", subject)
+                        .eq("date", str(now.date()))
                         .execute()
                 )
             except RuntimeError as e:
-                if 'DB_OPEN' not in str(e):
+                if "DB_OPEN" not in str(e):
                     raise
                 return jsonify({
-                    'success': False,
-                    'message': 'DB_OFFLINE',
-                    'db_state': 'OPEN'
+                    "success": False,
+                    "message": "DB_OFFLINE",
+                    "db_state": "OPEN",
                 })
 
             if existing.data:
                 skipped_names.append(name)
             else:
-                # ── Layer 1+2: retry + circuit breaker on INSERT ──
+                # ── Layer 1+2: retry + circuit breaker on INSERT ──────
                 try:
                     insert_result = supabase_with_retry(
-                    lambda: supabase_client.table("attendance").insert({
-                     "student_id": student_id,
-                      "name": name,
-                     "department": dept,
-                       "class": cls,
-                        "subject": subject,
-                        "date": str(now.date()),
-                        "time": str(now.time()),
-                             "status": "Present",
-                          }).execute()
-                           )
+                        lambda: supabase_client.table("attendance").insert({
+                            "student_id": student_id,
+                            "name": name,
+                            "department": dept,
+                            "class": cls,
+                            "subject": subject,
+                            "date": str(now.date()),
+                            "time": str(now.time()),
+                            "status": "Present",
+                        }).execute()
+                    )
+
                     if insert_result.data:
-                         log_attendance_audit(
-                             attendance_id=insert_result.data[0]["id"],
-                             action="Create",
-                             previous_values=None,
-                             updated_values=insert_result.data[0],
-                         )
+                        log_attendance_audit(
+                            attendance_id=insert_result.data[0]["id"],
+                            action="Create",
+                            previous_values=None,
+                            updated_values=insert_result.data[0],
+                        )
+
                     marked_names.append(name)
+
                 except RuntimeError as e:
-                    if 'DB_OPEN' in str(e):
+                    if "DB_OPEN" in str(e):
                         return jsonify({
-                            'success': False,
-                            'message': 'DB_OFFLINE',
-                            'db_state': 'OPEN'
+                            "success": False,
+                            "message": "DB_OFFLINE",
+                            "db_state": "OPEN",
                         })
                     raise
 
         except Exception as e:
             print(f"DB ERROR: {e}")
             return jsonify({
-                'success': False,
-                'message': 'DB_ERROR',
-                'db_state': _supabase_breaker.state
+                "success": False,
+                "message": "DB_ERROR",
+                "db_state": _supabase_breaker.state,
             })
 
     if marked_names:
-        return jsonify({'success': True, 'message': f'✅ Marked: {", ".join(marked_names)}'})
+        return jsonify({
+            "success": True,
+            "message": f'✅ Marked: {", ".join(marked_names)}',
+        })
+
     elif skipped_names:
-        return jsonify({'success': False, 'message': f'⚠️ Already marked today: {", ".join(skipped_names)}'})
+        return jsonify({
+            "success": False,
+            "message": f'⚠️ Already marked today: {", ".join(skipped_names)}',
+        })
+
     else:
-        return jsonify({'success': False, 'message': 'Face detected but not recognized. Re-register in better lighting.'})
+        return jsonify({
+            "success": False,
+            "message": "Face detected but not recognized. Re-register in better lighting.",
+        })
 
 # ================= END SESSION =================
 @app.route('/end_session', methods=['POST'])

@@ -23,6 +23,12 @@ CREATE TABLE IF NOT EXISTS attendance_audit_logs (
 -- Enable Row Level Security
 ALTER TABLE attendance_audit_logs ENABLE ROW LEVEL SECURITY;
 
+-- Allow inserts
+CREATE POLICY "allow_insert_audit"
+ON attendance_audit_logs
+FOR INSERT
+WITH CHECK (true);
+
 -- Prevent updates
 CREATE POLICY "no_update_audit"
 ON attendance_audit_logs
@@ -33,15 +39,4 @@ USING (false);
 CREATE POLICY "no_delete_audit"
 ON attendance_audit_logs
 FOR DELETE
-USING (false);
-ALTER TABLE attendance_audit_logs ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "no_delete_audit"
-ON attendance_audit_logs
-FOR DELETE
-USING (false);
-
-CREATE POLICY "no_update_audit"
-ON attendance_audit_logs
-FOR UPDATE
 USING (false);
