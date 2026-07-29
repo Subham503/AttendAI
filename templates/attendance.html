@@ -430,8 +430,12 @@
             <td style="font-family:'Share Tech Mono',monospace;font-size:12px;">{{ row[6] }}</td>
             <td style="font-family:'Share Tech Mono',monospace;font-size:12px;">{{ row[7] }}</td>
             <td><span class="badge-present">{{ row[8] }}</span></td>
-            <td><a href="/delete/{{ row[0] }}" class="del-btn"
-                onclick="return confirm('Delete this record?')">DELETE</a></td>
+            <td>
+              <form action="/delete/{{ row[0] }}" method="POST" style="display:inline;" onsubmit="return confirm('Delete this record?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="del-btn" style="cursor:pointer;">DELETE</button>
+              </form>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
