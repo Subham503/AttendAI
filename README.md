@@ -110,7 +110,6 @@ Notes:
 - `MAIL_PASSWORD` must be a Gmail App Password, not your normal Gmail password.
 - Email alert functionality remains disabled if mail credentials are not configured.
 - Contributors without SMTP credentials can still run the project normally.
-```
 
 ### Database Setup
 
@@ -160,6 +159,124 @@ python app.py
 ```
 
 Visit `http://localhost:5000`
+
+---
+
+## 🛠️ Troubleshooting
+
+If you encounter issues while setting up or running AttendAI, try the following solutions.
+
+### 1. ModuleNotFoundError
+
+**Problem**
+
+```
+ModuleNotFoundError: No module named 'flask'
+```
+
+**Solution**
+
+- Activate your virtual environment.
+- Install all required dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+If `requirements.txt` is unavailable, install the required packages manually.
+
+---
+
+### 2. Missing or Incorrect `.env` Variables
+
+**Problem**
+
+The application fails to start or cannot connect to Supabase.
+
+**Solution**
+
+- Create a `.env` file in the project root.
+- Copy the required variables from the README.
+- Ensure there are no spelling mistakes or empty values.
+
+---
+
+### 3. Supabase Connection Errors
+
+**Problem**
+
+Database operations fail or authentication errors occur.
+
+**Solution**
+
+- Verify `SUPABASE_URL` and `SUPABASE_KEY`.
+- Confirm your Supabase project is active.
+- Restart the Flask application after updating the `.env` file.
+
+---
+
+### 4. Webcam Permission Issues
+
+**Problem**
+
+The browser cannot access the webcam.
+
+**Solution**
+
+- Allow camera permission in your browser.
+- Close any other application currently using the webcam.
+- Refresh the page and try again.
+
+---
+
+### 5. MediaPipe or OpenCV Installation Problems
+
+**Problem**
+
+Import errors occur for MediaPipe or OpenCV.
+
+**Solution**
+
+```bash
+pip install --upgrade mediapipe opencv-contrib-python
+```
+
+If the issue persists, recreate your virtual environment and reinstall dependencies.
+
+---
+
+### 6. Port 5000 Already in Use
+
+**Problem**
+
+```
+Address already in use
+Port 5000 is already occupied.
+```
+
+**Solution**
+
+Run the application on another port:
+
+```bash
+flask run --port=5001
+```
+
+or stop the process currently using port `5000`.
+
+---
+
+### 7. Flask-Mail Configuration Errors
+
+**Problem**
+
+Attendance warning emails are not being sent.
+
+**Solution**
+
+- Verify `MAIL_USERNAME` and `MAIL_PASSWORD`.
+- Use a Gmail App Password instead of your Gmail account password.
+- Restart the application after updating mail credentials.
 
 ---
 
