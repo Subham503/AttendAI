@@ -23,6 +23,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from liveness import verify_liveness
 import qrcode
+from flask_wtf.csrf import CSRFProtect
 
 # Reg-no must be purely alphanumeric with optional hyphens/underscores,
 # 2-30 characters. Rejects any path traversal sequence (dots, slashes, etc.).
@@ -32,6 +33,7 @@ _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 load_dotenv()
 
 app = Flask(__name__)
+csrf = CSRFProtect(app)
 secret_key = os.getenv("SECRET_KEY")
 if not secret_key:
     raise RuntimeError("SECRET_KEY is required. Set a secret key in .env before starting the app.")
@@ -1222,7 +1224,7 @@ def check_attendance_alerts():
     })
 
 # ================= DELETE =================
-@app.route('/delete/<int:id>')
+@app.route('/delete/<int:id>', methods=['POST'])
 def delete(id):
     if not session.get('logged_in'):
         return redirect('/login')
